@@ -1,7 +1,6 @@
 package com.faber.api.im.core.rest;
 
 import java.util.List;
-import java.util.Arrays;
 
 import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
@@ -83,13 +82,10 @@ public class ImConversationController extends BaseResHandler {
     }
 
     @FaLogOpr(value = "退出群聊", crud = LogCrudEnum.D)
-    @RequestMapping(value = "/exitGroupChat/{conversationId}", method = RequestMethod.GET)
+    @RequestMapping(value = "/exitGroupChat/{conversationId}", method = RequestMethod.POST)
     @ResponseBody
     public Ret<Boolean> exitGroupChat(@PathVariable @Validated(value = Vg.Crud.R.class) Long conversationId) {
-        ImConversationRemoveGroupUsersReqVo reqVo = new ImConversationRemoveGroupUsersReqVo();
-        reqVo.setConversationId(String.valueOf(conversationId));
-        reqVo.setUserIds(Arrays.asList(getCurrentUserId()));
-        baseBiz.removeGroupUsers(reqVo);
+        baseBiz.exitGroupChat(conversationId);
         return ok();
     }
 

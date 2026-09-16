@@ -168,11 +168,15 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     /** 创建新的群聊 */
     @Transactional
     public ImConversation addGroupUsers(ImConversationAddGroupUsersReqVo reqVo) {
-        ImConversation conversation = this.getById(reqVo.getConversationId());
+        Long conversationId = parseConversationId(reqVo.getConversationId());
+        ImConversation conversation = requireGroupParticipant(conversationId, getCurrentUserId());
+        if (reqVo.getUserIds() == null || reqVo.getUserIds().isEmpty()) {
+            throw new BuzzException("群聊用户不能为空");
+        }
 
         // 过滤已经参加该群聊的用户
         List<String> inUserIdList = imParticipantBiz.lambdaQuery()
-            .eq(ImParticipant::getConversationId, reqVo.getConversationId())
+            .eq(ImParticipant::getConversationId, conversationId)
             .in(ImParticipant::getUserId, reqVo.getUserIds())
             .select(ImParticipant::getUserId)
             .list()
@@ -197,8 +201,8 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         imParticipantBiz.saveBatch(participantList);
 
         // update conversation cover
-        List<String> userIds = imParticipantBiz.lambdaQuery()
-            .eq(ImParticipant::getConversationId, reqVo.getConversationId())
+        List<String> coverUserIds = imParticipantBiz.lambdaQuery()
+            .eq(ImParticipant::getConversationId, conversationId)
             .select(ImParticipant::getUserId)
             .orderByAsc(ImParticipant::getCrtTime, ImParticipant::getUserId)
             .last("limit 9") // 群聊封面最多展示9个用户头像
@@ -206,7 +210,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             .stream().map(i -> i.getUserId()).toList();
 
         // 更新群聊头像
-        JSONArray imgArr = getUserImgs(userIds);
+        JSONArray imgArr = getUserImgs(coverUserIds);
         conversation.setCover(imgArr.toString());
 
         this.lambdaUpdate()
@@ -222,17 +226,50 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     /** 移出群聊 */
     @Transactional
     public ImConversation removeGroupUsers(ImConversationRemoveGroupUsersReqVo reqVo) {
-        ImConversation conversation = this.getById(reqVo.getConversationId());
+        Long conversationId = parseConversationId(reqVo.getConversationId());
+        ImConversation conversation = requireGroupManager(conversationId);
+        if (reqVo.getUserIds() == null || reqVo.getUserIds().isEmpty()) {
+            throw new BuzzException("移出用户不能为空");
+        }
+
+        List<String> removeUserIds = imParticipantBiz.lambdaQuery()
+            .eq(ImParticipant::getConversationId, conversationId)
+            .in(ImParticipant::getUserId, reqVo.getUserIds())
+            .select(ImParticipant::getUserId)
+            .list()
+            .stream().map(ImParticipant::getUserId).distinct().toList();
+        if (removeUserIds.isEmpty()) {
+            throw new BuzzException("移出用户不是群聊成员");
+        }
+        if (removeUserIds.contains(conversation.getManagerId())) {
+            throw new BuzzException("不能移出群管理员");
+        }
+
+        return removeGroupUsers(conversation, removeUserIds);
+    }
+
+    /** 当前用户退出群聊。 */
+    @Transactional
+    public ImConversation exitGroupChat(Long conversationId) {
+        ImConversation conversation = requireGroupParticipant(conversationId, getCurrentUserId());
+        if (getCurrentUserId().equals(conversation.getManagerId())) {
+            throw new BuzzException("群管理员需先转移管理员后才能退出群聊");
+        }
+        return removeGroupUsers(conversation, List.of(getCurrentUserId()));
+    }
+
+    private ImConversation removeGroupUsers(ImConversation conversation, List<String> userIds) {
+        Long conversationId = conversation.getId();
 
         // 移出群聊
         imParticipantBiz.lambdaUpdate()
-            .eq(ImParticipant::getConversationId, reqVo.getConversationId())
-            .in(ImParticipant::getUserId, reqVo.getUserIds())
+            .eq(ImParticipant::getConversationId, conversationId)
+            .in(ImParticipant::getUserId, userIds)
             .remove();
 
         // update conversation cover
-        List<String> userIds = imParticipantBiz.lambdaQuery()
-            .eq(ImParticipant::getConversationId, reqVo.getConversationId())
+        List<String> coverUserIds = imParticipantBiz.lambdaQuery()
+            .eq(ImParticipant::getConversationId, conversationId)
             .select(ImParticipant::getUserId)
             .orderByAsc(ImParticipant::getCrtTime, ImParticipant::getUserId)
             .last("limit 9") // 群聊封面最多展示9个用户头像
@@ -240,7 +277,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             .stream().map(i -> i.getUserId()).toList();
 
         // 更新群聊头像
-        JSONArray imgArr = getUserImgs(userIds);
+        JSONArray imgArr = getUserImgs(coverUserIds);
         conversation.setCover(imgArr.toString());
 
         this.lambdaUpdate()
@@ -249,11 +286,11 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             .update();
         
         // TODO websocket通知移出群聊用户更新群聊
-        WsHolder.sendMessage(reqVo.getUserIds(), WsTypeEnum.IM_EXIT_GROUP_CHAT, conversation);
+        WsHolder.sendMessage(userIds, WsTypeEnum.IM_EXIT_GROUP_CHAT, conversation);
 
         // TODO websocket通知群聊用户更新群聊
         List<String> notifyUserIds = imParticipantBiz.lambdaQuery()
-            .eq(ImParticipant::getConversationId, reqVo.getConversationId())
+            .eq(ImParticipant::getConversationId, conversationId)
             .select(ImParticipant::getUserId)
             .orderByAsc(ImParticipant::getCrtTime, ImParticipant::getUserId)
             .list()
@@ -264,9 +301,10 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     }
 
     public ImConversation renameGroup(ImConversationRenameReqVo reqVo) {
-        ImConversation conversation = this.getById(reqVo.getConversationId());
+        Long conversationId = parseConversationId(reqVo.getConversationId());
+        ImConversation conversation = requireGroupManager(conversationId);
         lambdaUpdate()
-            .eq(ImConversation::getId, conversation.getId())
+            .eq(ImConversation::getId, conversationId)
             .set(ImConversation::getTitle, reqVo.getTitle())
             .update();
         conversation.setTitle(reqVo.getTitle());
@@ -376,16 +414,39 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         if (query == null || query.getQuery() == null || query.getQuery().getConversationId() == null) {
             throw new BuzzException("会话ID不能为空");
         }
-        Long conversationId;
-        try {
-            conversationId = Long.valueOf(query.getQuery().getConversationId());
-        } catch (NumberFormatException e) {
-            throw new BuzzException("会话ID格式错误");
-        }
+        Long conversationId = parseConversationId(query.getQuery().getConversationId());
         imParticipantBiz.requireParticipant(conversationId, getCurrentUserId());
 
         PageInfo<ImParticipant> info = PageHelper.startPage(query.getCurrent(), query.getPageSize())
                 .doSelectPageInfo(() -> baseMapper.getParticipant(query.getQuery()));
         return new TableRet<>(info);
+    }
+
+    private Long parseConversationId(String conversationId) {
+        if (conversationId == null || conversationId.trim().isEmpty()) {
+            throw new BuzzException("会话ID不能为空");
+        }
+        try {
+            return Long.valueOf(conversationId.trim());
+        } catch (NumberFormatException e) {
+            throw new BuzzException("会话ID格式错误");
+        }
+    }
+
+    private ImConversation requireGroupParticipant(Long conversationId, String userId) {
+        ImConversation conversation = getById(conversationId);
+        if (conversation == null || conversation.getType() != ImConversationTypeEnum.GROUP) {
+            throw new BuzzException("群聊不存在");
+        }
+        imParticipantBiz.requireParticipant(conversationId, userId);
+        return conversation;
+    }
+
+    private ImConversation requireGroupManager(Long conversationId) {
+        ImConversation conversation = requireGroupParticipant(conversationId, getCurrentUserId());
+        if (!getCurrentUserId().equals(conversation.getManagerId())) {
+            throw new BuzzException("只有群管理员可以执行此操作");
+        }
+        return conversation;
     }
 }
