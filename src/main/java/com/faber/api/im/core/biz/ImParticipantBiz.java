@@ -22,6 +22,9 @@ public class ImParticipantBiz extends BaseBiz<ImParticipantMapper,ImParticipant>
         if (conversationId == null || userId == null) {
             throw new BuzzException("会话参数不能为空");
         }
+        if (conversationId <= 0) {
+            throw new BuzzException("会话ID必须为正数");
+        }
 
         ImParticipant participant = lambdaQuery()
             .eq(ImParticipant::getConversationId, conversationId)

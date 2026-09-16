@@ -3,6 +3,7 @@ package com.faber.api.im.core.rest;
 import java.util.List;
 
 import jakarta.annotation.Resource;
+import jakarta.validation.constraints.Positive;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -43,6 +44,7 @@ import com.faber.core.utils.BaseResHandler;
  */
 @FaLogBiz("IM-会话表")
 @RestController
+@Validated
 @RequestMapping("/api/im/core/imConversation")
 public class ImConversationController extends BaseResHandler {
 
@@ -84,7 +86,7 @@ public class ImConversationController extends BaseResHandler {
     @FaLogOpr(value = "退出群聊", crud = LogCrudEnum.D)
     @RequestMapping(value = "/exitGroupChat/{conversationId}", method = RequestMethod.POST)
     @ResponseBody
-    public Ret<Boolean> exitGroupChat(@PathVariable @Validated(value = Vg.Crud.R.class) Long conversationId) {
+    public Ret<Boolean> exitGroupChat(@PathVariable @Positive Long conversationId) {
         baseBiz.exitGroupChat(conversationId);
         return ok();
     }
@@ -100,7 +102,7 @@ public class ImConversationController extends BaseResHandler {
     @FaLogOpr(value = "聊天查询", crud = LogCrudEnum.R)
     @RequestMapping(value = "/listQuery", method = RequestMethod.POST)
     @ResponseBody
-    public Ret<List<ImConversationRetVo>> listQuery(@RequestBody ImConversationListQueryReqVo reqVo) {
+    public Ret<List<ImConversationRetVo>> listQuery(@Validated(value = Vg.Crud.R.class) @RequestBody ImConversationListQueryReqVo reqVo) {
         List<ImConversationRetVo> list = baseBiz.listQuery(reqVo);
         return ok(list);
     }
@@ -132,7 +134,7 @@ public class ImConversationController extends BaseResHandler {
     @FaLogOpr(value = "获取聊天参与者", crud = LogCrudEnum.C)
     @RequestMapping(value = "/getParticipant", method = RequestMethod.POST)
     @ResponseBody
-    public TableRet<ImParticipant> getParticipant(@RequestBody BasePageQuery<ImConversationGetParticipantReqVo> reqVo) {
+    public TableRet<ImParticipant> getParticipant(@Validated @RequestBody BasePageQuery<ImConversationGetParticipantReqVo> reqVo) {
         return baseBiz.getParticipant(reqVo);
     }
 

@@ -30,6 +30,9 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
         if (query == null || query.getQuery() == null || query.getQuery().getConversationId() == null) {
             throw new BuzzException("会话ID不能为空");
         }
+        if (query.getQuery().getMaxMsgId() != null && query.getQuery().getMaxMsgId() <= 0) {
+            throw new BuzzException("消息ID必须为正数");
+        }
         imParticipantBiz.requireParticipant(query.getQuery().getConversationId(), getCurrentUserId());
 
         PageInfo<ImMessage> info = PageHelper.startPage(query.getCurrent(), query.getPageSize())

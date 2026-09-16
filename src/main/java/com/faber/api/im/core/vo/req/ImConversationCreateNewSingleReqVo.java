@@ -2,7 +2,8 @@ package com.faber.api.im.core.vo.req;
 
 import java.io.Serializable;
 
-import com.dtflys.forest.annotation.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 import lombok.Data;
 
@@ -10,7 +11,8 @@ import lombok.Data;
 public class ImConversationCreateNewSingleReqVo implements Serializable {
 
     /** 单聊对方用户ID */
-    @NotNull
+    @NotBlank
+    @Size(max = 32)
     private String toUserId;
     
 }

@@ -2,7 +2,9 @@ package com.faber.api.im.core.vo.req;
 
 import java.io.Serializable;
 
-import com.dtflys.forest.annotation.NotNull;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import lombok.Data;
 
@@ -10,8 +12,10 @@ import lombok.Data;
 public class ImConversationGetParticipantReqVo implements Serializable {
 
     @NotNull
-    private String conversationId;
+    @Positive
+    private Long conversationId;
 
+    @Size(max = 255)
     private String name;
 
 }

@@ -10,7 +10,7 @@
         INNER JOIN im_conversation c on t.conversation_id = c.id
         WHERE c.deleted = FALSE
         AND t.user_id = #{userId}
-        <if test="query.conversationId != null and query.conversationId.trim() != ''">
+        <if test="query.conversationId != null">
             and t.conversation_id = #{query.conversationId}
         </if>
         <if test="query.title != null and query.title.trim() != ''">

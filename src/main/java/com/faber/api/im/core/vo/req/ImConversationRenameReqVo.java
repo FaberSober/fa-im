@@ -2,7 +2,10 @@ package com.faber.api.im.core.vo.req;
 
 import java.io.Serializable;
 
-import com.dtflys.forest.annotation.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 
 import lombok.Data;
 
@@ -10,10 +13,12 @@ import lombok.Data;
 public class ImConversationRenameReqVo implements Serializable {
 
     @NotNull
-    private String conversationId;
+    @Positive
+    private Long conversationId;
 
-    /** 群聊用户ID */
-    @NotNull
+    /** 群聊名称 */
+    @NotBlank
+    @Size(max = 255)
     private String title;
     
 }

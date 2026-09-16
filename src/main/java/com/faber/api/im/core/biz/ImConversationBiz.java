@@ -168,7 +168,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     /** 创建新的群聊 */
     @Transactional
     public ImConversation addGroupUsers(ImConversationAddGroupUsersReqVo reqVo) {
-        Long conversationId = parseConversationId(reqVo.getConversationId());
+        Long conversationId = reqVo.getConversationId();
         ImConversation conversation = requireGroupParticipant(conversationId, getCurrentUserId());
         if (reqVo.getUserIds() == null || reqVo.getUserIds().isEmpty()) {
             throw new BuzzException("群聊用户不能为空");
@@ -226,7 +226,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     /** 移出群聊 */
     @Transactional
     public ImConversation removeGroupUsers(ImConversationRemoveGroupUsersReqVo reqVo) {
-        Long conversationId = parseConversationId(reqVo.getConversationId());
+        Long conversationId = reqVo.getConversationId();
         ImConversation conversation = requireGroupManager(conversationId);
         if (reqVo.getUserIds() == null || reqVo.getUserIds().isEmpty()) {
             throw new BuzzException("移出用户不能为空");
@@ -301,7 +301,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     }
 
     public ImConversation renameGroup(ImConversationRenameReqVo reqVo) {
-        Long conversationId = parseConversationId(reqVo.getConversationId());
+        Long conversationId = reqVo.getConversationId();
         ImConversation conversation = requireGroupManager(conversationId);
         lambdaUpdate()
             .eq(ImConversation::getId, conversationId)
@@ -414,7 +414,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         if (query == null || query.getQuery() == null || query.getQuery().getConversationId() == null) {
             throw new BuzzException("会话ID不能为空");
         }
-        Long conversationId = parseConversationId(query.getQuery().getConversationId());
+        Long conversationId = query.getQuery().getConversationId();
         imParticipantBiz.requireParticipant(conversationId, getCurrentUserId());
 
         PageInfo<ImParticipant> info = PageHelper.startPage(query.getCurrent(), query.getPageSize())
@@ -422,18 +422,10 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         return new TableRet<>(info);
     }
 
-    private Long parseConversationId(String conversationId) {
-        if (conversationId == null || conversationId.trim().isEmpty()) {
-            throw new BuzzException("会话ID不能为空");
-        }
-        try {
-            return Long.valueOf(conversationId.trim());
-        } catch (NumberFormatException e) {
-            throw new BuzzException("会话ID格式错误");
-        }
-    }
-
     private ImConversation requireGroupParticipant(Long conversationId, String userId) {
+        if (conversationId == null || conversationId <= 0) {
+            throw new BuzzException("会话ID必须为正数");
+        }
         ImConversation conversation = getById(conversationId);
         if (conversation == null || conversation.getType() != ImConversationTypeEnum.GROUP) {
             throw new BuzzException("群聊不存在");

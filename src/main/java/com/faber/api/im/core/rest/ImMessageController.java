@@ -1,6 +1,7 @@
 package com.faber.api.im.core.rest;
 
 import jakarta.annotation.Resource;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -38,7 +39,7 @@ public class ImMessageController extends BaseResHandler {
     @LogNoRet
     @RequestMapping(value = "/pageQuery", method = RequestMethod.POST)
     @ResponseBody
-    public TableRet<ImMessage> pageQuery(@RequestBody BasePageQuery<ImMessagePageQueryVo> query) {
+    public TableRet<ImMessage> pageQuery(@Valid @RequestBody BasePageQuery<ImMessagePageQueryVo> query) {
         return baseBiz.pageQuery(query);
     }
 
