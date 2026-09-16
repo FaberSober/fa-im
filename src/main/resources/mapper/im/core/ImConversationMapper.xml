@@ -30,11 +30,11 @@
 
     <!-- updateUnreadByConvId --> 
     <update id="updateUnreadByConvId">
-        UPDATE im_participant t
-        SET t.unread_count = IFNULL(t.unread_count, 0) + 1
-        WHERE t.conversation_id = #{conversationId}
+        UPDATE im_participant
+        SET unread_count = COALESCE(unread_count, 0) + 1
+        WHERE conversation_id = #{conversationId}
         <if test="excludeUserId != null and excludeUserId.trim() != ''">
-            AND t.user_id != #{excludeUserId}
+            AND user_id != #{excludeUserId}
         </if>
     </update>
 
