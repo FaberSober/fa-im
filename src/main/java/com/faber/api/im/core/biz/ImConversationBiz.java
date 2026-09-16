@@ -5,18 +5,22 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
+import com.faber.api.base.admin.biz.FileSaveBiz;
 import com.faber.api.base.admin.biz.UserBiz;
+import com.faber.api.base.admin.entity.FileSave;
 import com.faber.api.base.admin.entity.User;
 import com.faber.api.im.core.entity.ImConversation;
 import com.faber.api.im.core.entity.ImMessage;
 import com.faber.api.im.core.entity.ImParticipant;
 import com.faber.api.im.core.enums.ImConversationTypeEnum;
+import com.faber.api.im.core.enums.ImMessageTypeEnum;
 import com.faber.api.im.core.mapper.ImConversationMapper;
 import com.faber.api.im.core.vo.req.ImConversationAddGroupUsersReqVo;
 import com.faber.api.im.core.vo.req.ImConversationCreateNewGroupReqVo;
@@ -37,8 +41,10 @@ import com.faber.core.web.biz.BaseBiz;
 import com.github.pagehelper.PageHelper;
 import com.github.pagehelper.PageInfo;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
+import cn.hutool.json.JSONUtil;
 import jakarta.annotation.Resource;
 
 /**
@@ -52,6 +58,7 @@ import jakarta.annotation.Resource;
 public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversation> {
 
     @Resource UserBiz userBiz;
+    @Resource FileSaveBiz fileSaveBiz;
     @Resource ImParticipantBiz imParticipantBiz;
     @Resource ImMessageBiz imMessageBiz;
 
@@ -340,6 +347,9 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
      * @return
      */
     public ImMessage sendMsg(ImConversationSendMsgReqVo reqVo) {
+        if (reqVo == null || reqVo.getType() == null) {
+            throw new BuzzException("消息类型不能为空");
+        }
         imParticipantBiz.requireParticipant(reqVo.getConversationId(), getCurrentUserId());
 
         // create new message
@@ -347,7 +357,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         msg.setConversationId(reqVo.getConversationId());
         msg.setSenderId(getCurrentUserId());
         msg.setType(reqVo.getType());
-        msg.setContent(reqVo.getContent());
+        msg.setContent(normalizeMessageContent(reqVo, msg));
         msg.setIsWithdrawn(false);
         imMessageBiz.save(msg);
 
@@ -391,6 +401,52 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         WsHolder.sendMessage(userIds, WsTypeEnum.IM, msg);
 
         return msg;
+    }
+
+    /** 按消息类型校验并规范化消息内容。附件元数据以附件表为准，避免客户端伪造。 */
+    private String normalizeMessageContent(ImConversationSendMsgReqVo reqVo, ImMessage msg) {
+        if (StrUtil.isBlank(reqVo.getContent())) {
+            throw new BuzzException("消息内容不能为空");
+        }
+        if (reqVo.getType() == ImMessageTypeEnum.TEXT) {
+            return reqVo.getContent();
+        }
+
+        JSONObject requestContent;
+        try {
+            requestContent = JSONUtil.parseObj(reqVo.getContent());
+        } catch (Exception e) {
+            throw new BuzzException("文件消息内容格式错误");
+        }
+        if (requestContent == null) {
+            throw new BuzzException("文件消息内容格式错误");
+        }
+
+        String fileId = StrUtil.trim(requestContent.getStr("fileId"));
+        if (StrUtil.isBlank(fileId) || fileId.length() > 32) {
+            throw new BuzzException("文件ID不能为空且长度不能超过32位");
+        }
+
+        FileSave fileSave = fileSaveBiz.getById(fileId);
+        if (fileSave == null) {
+            throw new BuzzException("附件不存在或已被删除");
+        }
+        if (StrUtil.isBlank(fileSave.getOriginalFilename()) || fileSave.getSize() == null || fileSave.getSize() < 0) {
+            throw new BuzzException("附件元数据无效");
+        }
+
+        String ext = StrUtil.trim(StrUtil.nullToEmpty(fileSave.getExt()));
+        if (ext.startsWith(".")) {
+            ext = ext.substring(1);
+        }
+
+        JSONObject normalizedContent = new JSONObject();
+        normalizedContent.set("fileId", fileId);
+        normalizedContent.set("fileName", fileSave.getOriginalFilename());
+        normalizedContent.set("fileSize", fileSave.getSize());
+        normalizedContent.set("ext", ext.toLowerCase(Locale.ROOT));
+        msg.setFileId(fileId);
+        return normalizedContent.toString();
     }
 
     /**
