@@ -10,6 +10,8 @@ import java.util.Locale;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.faber.api.base.admin.biz.FileSaveBiz;
@@ -182,6 +184,11 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             participantList.add(participant);
         }
         imParticipantBiz.saveBatch(participantList);
+        sendAfterCommit(
+            userIds.stream().filter(userId -> !userId.equals(getCurrentUserId())).toList(),
+            WsTypeEnum.IM_REFRESH_GROUP_CHAT,
+            conversation
+        );
 
         return conversation;
     }
@@ -237,8 +244,10 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             .eq(ImConversation::getId, conversation.getId())
             .set(ImConversation::getCover, imgArr.toString())
             .update();
-        
-        // TODO websocket通知群聊用户更新群聊
+
+        List<String> participantUserIds = getParticipantUserIds(conversationId);
+        conversation.setUserIds(new JSONArray(participantUserIds).toString());
+        sendAfterCommit(participantUserIds, WsTypeEnum.IM_REFRESH_GROUP_CHAT, conversation);
 
         return conversation;
     }
@@ -302,22 +311,16 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             .eq(ImConversation::getId, conversation.getId())
             .set(ImConversation::getCover, imgArr.toString())
             .update();
-        
-        // TODO websocket通知移出群聊用户更新群聊
-        WsHolder.sendMessage(userIds, WsTypeEnum.IM_EXIT_GROUP_CHAT, conversation);
 
-        // TODO websocket通知群聊用户更新群聊
-        List<String> notifyUserIds = imParticipantBiz.lambdaQuery()
-            .eq(ImParticipant::getConversationId, conversationId)
-            .select(ImParticipant::getUserId)
-            .orderByAsc(ImParticipant::getCrtTime, ImParticipant::getUserId)
-            .list()
-            .stream().map(i -> i.getUserId()).toList();
-        WsHolder.sendMessage(notifyUserIds, WsTypeEnum.IM_REFRESH_GROUP_CHAT, conversation);
+        List<String> participantUserIds = getParticipantUserIds(conversationId);
+        conversation.setUserIds(new JSONArray(participantUserIds).toString());
+        sendAfterCommit(userIds, WsTypeEnum.IM_EXIT_GROUP_CHAT, conversation);
+        sendAfterCommit(participantUserIds, WsTypeEnum.IM_REFRESH_GROUP_CHAT, conversation);
 
         return conversation;
     }
 
+    @Transactional
     public ImConversation renameGroup(ImConversationRenameReqVo reqVo) {
         Long conversationId = reqVo.getConversationId();
         ImConversation conversation = requireGroupManager(conversationId);
@@ -326,6 +329,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             .set(ImConversation::getTitle, reqVo.getTitle())
             .update();
         conversation.setTitle(reqVo.getTitle());
+        sendAfterCommit(getParticipantUserIds(conversationId), WsTypeEnum.IM_REFRESH_GROUP_CHAT, conversation);
         return conversation;
     }
 
@@ -346,6 +350,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
      * @param reqVo
      * @return
      */
+    @Transactional
     public ImMessage sendMsg(ImConversationSendMsgReqVo reqVo) {
         if (reqVo == null || reqVo.getType() == null) {
             throw new BuzzException("消息类型不能为空");
@@ -398,9 +403,35 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
 
         // send message throw websocket
         msg.setSenderUserImg(userBiz.getLoginUser().getImg());
-        WsHolder.sendMessage(userIds, WsTypeEnum.IM, msg);
+        sendAfterCommit(userIds, WsTypeEnum.IM, msg);
 
         return msg;
+    }
+
+    private List<String> getParticipantUserIds(Long conversationId) {
+        return imParticipantBiz.lambdaQuery()
+            .eq(ImParticipant::getConversationId, conversationId)
+            .select(ImParticipant::getUserId)
+            .orderByAsc(ImParticipant::getCrtTime, ImParticipant::getUserId)
+            .list()
+            .stream().map(ImParticipant::getUserId).toList();
+    }
+
+    /** 事务提交后再通知，避免客户端收到尚未可查询的数据。 */
+    private void sendAfterCommit(List<String> userIds, WsTypeEnum type, Object message) {
+        if (userIds == null || userIds.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            WsHolder.sendMessage(userIds, type, message);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                WsHolder.sendMessage(userIds, type, message);
+            }
+        });
     }
 
     /** 按消息类型校验并规范化消息内容。附件元数据以附件表为准，避免客户端伪造。 */
