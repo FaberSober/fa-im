@@ -3,11 +3,12 @@ package com.faber.api.im.core.biz;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.dao.DuplicateKeyException;
 
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.faber.api.base.admin.biz.UserBiz;
@@ -139,10 +140,15 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     /** 创建新的群聊 */
     @Transactional
     public ImConversation createNewGroup(ImConversationCreateNewGroupReqVo reqVo) {
-        List<String> userIds = reqVo.getUserIds();
+        List<String> userIds = normalizeUserIds(reqVo.getUserIds());
+        String currentUserId = getCurrentUserId();
+        if (!userIds.contains(currentUserId)) {
+            userIds.add(0, currentUserId);
+        }
         if (userIds.size() < 3) {
             throw new BuzzException("群聊最少添加三位用户");
         }
+        requireExistingUsers(userIds);
 
         // 聊天封面图片，为参加聊天的用户头像数组
         JSONArray imgArr = getUserImgs(userIds);
@@ -151,7 +157,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
 
         // create new conversation
         ImConversation conversation = new ImConversation();
-        conversation.setUserIds("[]");
+        conversation.setUserIds(new JSONArray(userIds).toString());
         conversation.setType(ImConversationTypeEnum.GROUP);
         conversation.setTitle(title);
         conversation.setCover(imgArr.toString());
@@ -178,18 +184,17 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     public ImConversation addGroupUsers(ImConversationAddGroupUsersReqVo reqVo) {
         Long conversationId = reqVo.getConversationId();
         ImConversation conversation = requireGroupParticipant(conversationId, getCurrentUserId());
-        if (reqVo.getUserIds() == null || reqVo.getUserIds().isEmpty()) {
-            throw new BuzzException("群聊用户不能为空");
-        }
+        List<String> requestedUserIds = normalizeUserIds(reqVo.getUserIds());
+        requireExistingUsers(requestedUserIds);
 
         // 过滤已经参加该群聊的用户
         List<String> inUserIdList = imParticipantBiz.lambdaQuery()
             .eq(ImParticipant::getConversationId, conversationId)
-            .in(ImParticipant::getUserId, reqVo.getUserIds())
+            .in(ImParticipant::getUserId, requestedUserIds)
             .select(ImParticipant::getUserId)
             .list()
             .stream().map(i -> i.getUserId()).toList();
-        List<String> addUserIds = reqVo.getUserIds().stream()
+        List<String> addUserIds = requestedUserIds.stream()
             .filter(i -> !inUserIdList.contains(i))
             .toList();
         if (addUserIds == null || addUserIds.isEmpty()) {
@@ -236,13 +241,11 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     public ImConversation removeGroupUsers(ImConversationRemoveGroupUsersReqVo reqVo) {
         Long conversationId = reqVo.getConversationId();
         ImConversation conversation = requireGroupManager(conversationId);
-        if (reqVo.getUserIds() == null || reqVo.getUserIds().isEmpty()) {
-            throw new BuzzException("移出用户不能为空");
-        }
+        List<String> requestedUserIds = normalizeUserIds(reqVo.getUserIds());
 
         List<String> removeUserIds = imParticipantBiz.lambdaQuery()
             .eq(ImParticipant::getConversationId, conversationId)
-            .in(ImParticipant::getUserId, reqVo.getUserIds())
+            .in(ImParticipant::getUserId, requestedUserIds)
             .select(ImParticipant::getUserId)
             .list()
             .stream().map(ImParticipant::getUserId).distinct().toList();
@@ -448,5 +451,21 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             throw new BuzzException("只有群管理员可以执行此操作");
         }
         return conversation;
+    }
+
+    private List<String> normalizeUserIds(List<String> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            throw new BuzzException("群聊用户不能为空");
+        }
+        return new ArrayList<>(new LinkedHashSet<>(userIds));
+    }
+
+    private void requireExistingUsers(List<String> userIds) {
+        long existingUserCount = userBiz.lambdaQuery()
+            .in(User::getId, userIds)
+            .count();
+        if (existingUserCount != userIds.size()) {
+            throw new BuzzException("群聊包含不存在的用户");
+        }
     }
 }
