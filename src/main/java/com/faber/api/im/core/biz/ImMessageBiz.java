@@ -30,6 +30,9 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
         if (query == null || query.getQuery() == null || query.getQuery().getConversationId() == null) {
             throw new BuzzException("会话ID不能为空");
         }
+        if (query.getCurrent() < 1 || query.getPageSize() < 1 || query.getPageSize() > 100) {
+            throw new BuzzException("分页参数无效，每页最多查询100条消息");
+        }
         if (query.getQuery().getMaxMsgId() != null && query.getQuery().getMaxMsgId() <= 0) {
             throw new BuzzException("消息ID必须为正数");
         }

@@ -15,7 +15,7 @@
         <if test="query.maxMsgId != null">
             and t.id &lt; #{query.maxMsgId}
         </if>
-        ORDER BY id DESC
+        ORDER BY t.id DESC
     </select>
 
 </mapper>

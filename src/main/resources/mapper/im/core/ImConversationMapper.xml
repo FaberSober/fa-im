@@ -5,7 +5,7 @@
 
     <!-- listQuery --> 
     <select id="listQuery" resultType="com.faber.api.im.core.vo.ret.ImConversationRetVo">
-        SELECT c.*, t.title as conv_title, t.unread_count, t.last_read_message_id
+        SELECT c.*, t.title as conv_title, COALESCE(t.unread_count, 0) as unread_count, t.last_read_message_id
         FROM im_participant t
         INNER JOIN im_conversation c on t.conversation_id = c.id
         WHERE c.deleted = FALSE
@@ -21,7 +21,7 @@
 
     <!-- countUnreadByUserId --> 
     <select id="countUnreadByUserId" resultType="java.lang.Integer">
-        SELECT sum(t.unread_count) as count
+        SELECT COALESCE(sum(t.unread_count), 0) as count
         FROM im_participant t
         LEFT JOIN im_conversation c ON t.conversation_id = c.id
         WHERE c.deleted = FALSE
