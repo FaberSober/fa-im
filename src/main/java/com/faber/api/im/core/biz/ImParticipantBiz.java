@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 
 import com.faber.api.im.core.entity.ImParticipant;
 import com.faber.api.im.core.mapper.ImParticipantMapper;
+import com.faber.core.exception.BuzzException;
 import com.faber.core.web.biz.BaseBiz;
 
 /**
@@ -15,4 +16,20 @@ import com.faber.core.web.biz.BaseBiz;
  */
 @Service
 public class ImParticipantBiz extends BaseBiz<ImParticipantMapper,ImParticipant> {
+
+    /** 校验当前用户是否属于指定会话。 */
+    public ImParticipant requireParticipant(Long conversationId, String userId) {
+        if (conversationId == null || userId == null) {
+            throw new BuzzException("会话参数不能为空");
+        }
+
+        ImParticipant participant = lambdaQuery()
+            .eq(ImParticipant::getConversationId, conversationId)
+            .eq(ImParticipant::getUserId, userId)
+            .one();
+        if (participant == null) {
+            throw new BuzzException("无权访问该会话");
+        }
+        return participant;
+    }
 }

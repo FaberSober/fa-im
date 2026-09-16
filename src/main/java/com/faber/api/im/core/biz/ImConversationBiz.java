@@ -291,6 +291,8 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
      * @return
      */
     public ImMessage sendMsg(ImConversationSendMsgReqVo reqVo) {
+        imParticipantBiz.requireParticipant(reqVo.getConversationId(), getCurrentUserId());
+
         // create new message
         ImMessage msg = new ImMessage();
         msg.setConversationId(reqVo.getConversationId());
@@ -347,6 +349,8 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
      * @param reqVo
      */
     public void updateConversationRead(String userId, Long conversationId) {
+        imParticipantBiz.requireParticipant(conversationId, userId);
+
         // 查询最新的消息
         ImMessage lastMsg = imMessageBiz.lambdaQuery()
             .eq(ImMessage::getConversationId, conversationId)
@@ -369,6 +373,17 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     }
 
     public TableRet<ImParticipant> getParticipant(BasePageQuery<ImConversationGetParticipantReqVo> query) {
+        if (query == null || query.getQuery() == null || query.getQuery().getConversationId() == null) {
+            throw new BuzzException("会话ID不能为空");
+        }
+        Long conversationId;
+        try {
+            conversationId = Long.valueOf(query.getQuery().getConversationId());
+        } catch (NumberFormatException e) {
+            throw new BuzzException("会话ID格式错误");
+        }
+        imParticipantBiz.requireParticipant(conversationId, getCurrentUserId());
+
         PageInfo<ImParticipant> info = PageHelper.startPage(query.getCurrent(), query.getPageSize())
                 .doSelectPageInfo(() -> baseMapper.getParticipant(query.getQuery()));
         return new TableRet<>(info);

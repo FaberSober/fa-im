@@ -1,5 +1,6 @@
 package com.faber.api.im.core.rest;
 
+import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
@@ -13,9 +14,9 @@ import com.faber.core.annotation.FaLogBiz;
 import com.faber.core.annotation.FaLogOpr;
 import com.faber.core.annotation.LogNoRet;
 import com.faber.core.enums.LogCrudEnum;
+import com.faber.core.utils.BaseResHandler;
 import com.faber.core.vo.msg.TableRet;
 import com.faber.core.vo.query.BasePageQuery;
-import com.faber.core.web.rest.BaseController;
 
 /**
  * IM-消息表
@@ -27,7 +28,10 @@ import com.faber.core.web.rest.BaseController;
 @FaLogBiz("IM-消息表")
 @RestController
 @RequestMapping("/api/im/core/imMessage")
-public class ImMessageController extends BaseController<ImMessageBiz, ImMessage, Long> {
+public class ImMessageController extends BaseResHandler {
+
+    @Resource
+    private ImMessageBiz baseBiz;
 
 
     @FaLogOpr(value = "分页查询", crud = LogCrudEnum.R)

@@ -3,6 +3,7 @@ package com.faber.api.im.core.rest;
 import java.util.List;
 import java.util.Arrays;
 
+import jakarta.annotation.Resource;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -32,7 +33,7 @@ import com.faber.core.enums.LogCrudEnum;
 import com.faber.core.vo.msg.Ret;
 import com.faber.core.vo.msg.TableRet;
 import com.faber.core.vo.query.BasePageQuery;
-import com.faber.core.web.rest.BaseController;
+import com.faber.core.utils.BaseResHandler;
 
 /**
  * IM-会话表
@@ -44,7 +45,10 @@ import com.faber.core.web.rest.BaseController;
 @FaLogBiz("IM-会话表")
 @RestController
 @RequestMapping("/api/im/core/imConversation")
-public class ImConversationController extends BaseController<ImConversationBiz, ImConversation, Long> {
+public class ImConversationController extends BaseResHandler {
+
+    @Resource
+    private ImConversationBiz baseBiz;
 
     @FaLogOpr(value = "开启新单聊", crud = LogCrudEnum.C)
     @RequestMapping(value = "/createNewSingle", method = RequestMethod.POST)

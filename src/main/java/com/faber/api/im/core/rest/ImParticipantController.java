@@ -1,9 +1,7 @@
 package com.faber.api.im.core.rest;
 
 import com.faber.core.annotation.FaLogBiz;
-import com.faber.core.web.rest.BaseController;
-import com.faber.api.im.core.biz.ImParticipantBiz;
-import com.faber.api.im.core.entity.ImParticipant;
+import com.faber.core.utils.BaseResHandler;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -17,6 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
 @FaLogBiz("IM-会话参与者表")
 @RestController
 @RequestMapping("/api/im/core/imParticipant")
-public class ImParticipantController extends BaseController<ImParticipantBiz, ImParticipant, Long> {
+public class ImParticipantController extends BaseResHandler {
 
 }
