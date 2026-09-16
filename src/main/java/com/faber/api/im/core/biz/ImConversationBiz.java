@@ -7,6 +7,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.dao.DuplicateKeyException;
 
 import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.faber.api.base.admin.biz.UserBiz;
@@ -65,15 +66,15 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         // 将参考单聊的用户IDs进行排序，然后转换为jsonarray
         List<String> userIds = Arrays.asList(getCurrentUserId(), reqVo.getToUserId());
         Collections.sort(userIds);
+        String singleKey = String.join(",", userIds);
         JSONArray userIdArray = new JSONArray(userIds);
         String userIdsStr = userIdArray.toString();
 
         LambdaQueryChainWrapper<ImConversation> wrapper = lambdaQuery()
-            .eq(ImConversation::getUserIds, userIdsStr)
-            .eq(ImConversation::getType, ImConversationTypeEnum.SINGLE);
-        long count = wrapper.count();
-        if (count > 0) {
-            return getTop(wrapper.orderByDesc(ImConversation::getId));
+            .eq(ImConversation::getSingleKey, singleKey);
+        ImConversation existing = wrapper.one();
+        if (existing != null) {
+            return existing;
         }
 
         User toUser = userBiz.getById(reqVo.getToUserId());
@@ -84,10 +85,17 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         // create new conversation
         ImConversation conversation = new ImConversation();
         conversation.setUserIds(userIdsStr);
+        conversation.setSingleKey(singleKey);
         conversation.setType(ImConversationTypeEnum.SINGLE);
         conversation.setTitle("单聊");
         conversation.setCover(imgArr.toString());
-        this.save(conversation);
+        try {
+            this.save(conversation);
+        } catch (DuplicateKeyException e) {
+            return lambdaQuery()
+                .eq(ImConversation::getSingleKey, singleKey)
+                .one();
+        }
 
         // save conversation user link
         {

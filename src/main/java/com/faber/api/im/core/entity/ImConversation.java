@@ -3,12 +3,14 @@ package com.faber.api.im.core.entity;
 import com.alibaba.excel.annotation.ExcelProperty;
 import com.alibaba.excel.annotation.write.style.ColumnWidth;
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.faber.api.im.core.enums.ImConversationTypeEnum;
 import com.faber.core.annotation.FaModalName;
 import com.faber.core.annotation.SqlEquals;
 import com.faber.core.bean.BaseDelEntity;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import lombok.Data;
 
@@ -38,6 +40,11 @@ public class ImConversation extends BaseDelEntity {
     /** 聊天用户ID排序后，用逗号拼接 */
     @ExcelProperty("聊天用户ID集合")
     private String userIds;
+
+    /** 单聊双方排序后的唯一标识，群聊为空。 */
+    @JsonIgnore
+    @TableField(select = false)
+    private String singleKey;
 
     @ExcelProperty("封面图标")
     private String cover;
