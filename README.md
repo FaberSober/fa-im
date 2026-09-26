@@ -1,172 +1,37 @@
 # fa-im 即时通讯模块
 
-## 模块介绍
+`fa-im` 是 FA Admin 的即时通讯模块。后端提供会话、群成员、消息和已读接口；管理端界面位于 `frontend/apps/admin/features/fa-im-pages`。
 
-fa-im 是一个基于 Spring Boot 和 React 的即时通讯模块，提供好友管理、会话管理、消息收发等核心功能。
+## 已实现功能
 
-## 功能特性
+- 单聊创建与去重；群聊创建、添加成员、移除成员、退出和重命名。
+- 按当前用户查询会话、群成员和历史消息；更新自己的会话已读状态与未读数。
+- 发送文本、图片、视频和文件消息。文件消息保存文件元数据。
+- 新消息、群成员和群名变化通过 WebSocket 通知相关用户。
+- 会话与消息接口校验当前用户的成员身份，群聊管理操作校验管理员权限。
 
-1. 好友管理
-   - 好友列表展示
-   - 好友添加/删除
-   - 好友分组管理
+## 尚未实现
 
-2. 会话管理
-   - 单聊支持
-   - 群聊支持
-   - 会话列表展示
+好友与好友分组、群公告、管理员转移、群聊解散、消息撤回、语音和表情消息。专项自动化测试见 [优化计划](docs/adrs/ADR-fa-im-001-im-optimization-plan.md) 的进度。
 
-3. 消息管理
-   - 文本消息发送
-   - 图片消息发送
-   - 文件消息发送
-   - 语音消息发送
-   - 视频消息发送
-   - 表情包消息发送
-   - 消息已读/未读状态
+## 数据库
 
-4. 群组管理
-   - 群组创建/解散
-   - 群成员管理
-   - 群公告设置
+模块通过 `FaImDbInit` 注册为 `fa-im`，随宿主应用的数据库初始化流程按版本执行脚本。根据数据库类型选择以下目录，按 `1.0.0`、`1.0.1`、`1.0.2` 顺序执行；已有数据库只执行尚未应用的版本。
 
-## 数据库表结构
+| 数据库 | 版本脚本目录 |
+| --- | --- |
+| MySQL | `src/main/resources/sql/fa-im/mysql/` |
+| PostgreSQL | `src/main/resources/sql/fa-im/postgre/` |
 
-- im_friend: 用户好友关系表
-- im_friend_group: 好友分组表
-- im_chat_session: 聊天会话表
-- im_group: 群聊信息表
-- im_group_member: 群成员表
-- im_message: 消息表
-- im_user_message: 用户消息状态表
+`1.0.0` 创建 `im_conversation`、`im_participant`、`im_message`、`im_message_read` 四张表；`1.0.1` 补齐字段约束与查询索引；`1.0.2` 增加单聊唯一标识。`db/im-mysql.sql` 是旧版导出文件，不是当前版本升级入口。
 
-## 技术栈
+## 主要接口
 
-### 后端
-- Spring Boot 3.3.3
-- MyBatis-Plus 3.5.12
-- MySQL 8.3.0
-- Redis 4
+所有接口均位于 `/api/im/core/` 下。请求体和返回结构以控制器及前端 service 为准。
 
-### 前端
-- React 18
-- Ant Design 5.x
-- Vite 3
-- TypeScript
+| 路径前缀 | 业务接口 |
+| --- | --- |
+| `imConversation` | `createNewSingle`、`createNewGroup`、`addGroupUsers`、`removeGroupUsers`、`exitGroupChat/{conversationId}`、`renameGroup`、`listQuery`、`sendMsg`、`updateConversationRead`、`getUnreadCount`、`getParticipant` |
+| `imMessage` | `pageQuery` |
 
-## 目录结构
-
-```
-fa-im/
-├── src/
-│   ├── main/
-│   │   ├── java/com/faber/api/im/
-│   │   │   ├── friend/              # 好友管理模块
-│   │   │   │   ├── biz/
-│   │   │   │   ├── entity/
-│   │   │   │   ├── mapper/
-│   │   │   │   └── rest/
-│   │   │   ├── session/             # 会话管理模块
-│   │   │   │   ├── biz/
-│   │   │   │   ├── entity/
-│   │   │   │   ├── mapper/
-│   │   │   │   └── rest/
-│   │   │   ├── message/             # 消息管理模块
-│   │   │   │   ├── biz/
-│   │   │   │   ├── entity/
-│   │   │   │   ├── mapper/
-│   │   │   │   └── rest/
-│   │   │   ├── group/               # 群组管理模块
-│   │   │   │   ├── biz/
-│   │   │   │   ├── entity/
-│   │   │   │   ├── mapper/
-│   │   │   │   └── rest/
-│   │   │   └── ImApplication.java   # 启动类
-│   │   └── resources/
-│   │       ├── mapper/              # MyBatis映射文件
-│   │       └── sql/                 # SQL脚本
-│   └── test/
-└── pom.xml
-```
-
-## 前端目录结构
-
-```
-frontend/apps/admin/features/fa-im-pages/
-├── components/                # 公共组件
-│   ├── chat/                  # 聊天组件
-│   ├── friend/                # 好友组件
-│   └── session/               # 会话组件
-├── pages/                     # 页面组件
-│   ├── admin/                 # 管理端页面
-│   │   └── im/                # 即时通讯页面
-│   │       ├── friend/        # 好友管理页面
-│   │       ├── session/       # 会话管理页面
-│   │       └── chat/          # 聊天页面
-├── services/                  # API服务
-│   ├── friend/                # 好友相关API
-│   ├── session/               # 会话相关API
-│   ├── message/               # 消息相关API
-│   └── group/                 # 群组相关API
-├── types/                     # TypeScript类型定义
-│   ├── friend/                # 好友相关类型
-│   ├── session/               # 会话相关类型
-│   ├── message/               # 消息相关类型
-│   └── group/                 # 群组相关类型
-└── index.ts                   # 模块入口文件
-```
-
-## 快速开始
-
-1. 创建数据库表结构：
-   执行 `db/im-mysql.sql` 文件创建表结构
-
-2. 启动后端服务：
-   ```bash
-   mvn spring-boot:run -pl fa-im
-   ```
-
-3. 启动前端服务：
-   ```bash
-   cd frontend
-   pnpm dev
-   ```
-
-## API接口
-
-### 好友管理
-- GET /api/im/friend/list - 获取好友列表
-- POST /api/im/friend/save - 添加好友
-- DELETE /api/im/friend/remove/{id} - 删除好友
-
-### 好友分组
-- GET /api/im/friend/group/list - 获取好友分组列表
-- POST /api/im/friend/group/save - 添加好友分组
-- PUT /api/im/friend/group/update - 更新好友分组
-- DELETE /api/im/friend/group/remove/{id} - 删除好友分组
-
-### 会话管理
-- GET /api/im/session/list - 获取会话列表
-- POST /api/im/session/save - 创建会话
-- PUT /api/im/session/update - 更新会话
-- DELETE /api/im/session/remove/{id} - 删除会话
-
-### 消息管理
-- GET /api/im/message/list - 获取消息列表
-- POST /api/im/message/send - 发送消息
-- PUT /api/im/message/recall/{id} - 撤回消息
-
-### 用户消息状态
-- GET /api/im/message/user/list - 获取用户消息状态列表
-- PUT /api/im/message/read/{messageId}/{userId} - 标记消息已读
-
-### 群组管理
-- GET /api/im/group/list - 获取群组列表
-- POST /api/im/group/save - 创建群组
-- PUT /api/im/group/update - 更新群组
-- DELETE /api/im/group/remove/{id} - 解散群组
-
-### 群成员管理
-- GET /api/im/group/member/list - 获取群成员列表
-- POST /api/im/group/member/save - 添加群成员
-- DELETE /api/im/group/member/remove/{id} - 移除群成员
+上述接口中 `getUnreadCount` 使用 GET，其余使用 POST。`imParticipant` 和 `imMessageRead` 控制器不提供通用 CRUD 业务接口。
