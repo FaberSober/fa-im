@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper;
 import com.faber.api.base.admin.biz.FileSaveBiz;
 import com.faber.api.base.admin.biz.UserBiz;
 import com.faber.api.base.admin.entity.FileSave;
@@ -79,9 +78,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         JSONArray userIdArray = new JSONArray(userIds);
         String userIdsStr = userIdArray.toString();
 
-        LambdaQueryChainWrapper<ImConversation> wrapper = lambdaQuery()
-            .eq(ImConversation::getSingleKey, singleKey);
-        ImConversation existing = wrapper.one();
+        ImConversation existing = findSingleByKey(singleKey);
         if (existing != null) {
             return existing;
         }
@@ -101,9 +98,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         try {
             this.save(conversation);
         } catch (DuplicateKeyException e) {
-            return lambdaQuery()
-                .eq(ImConversation::getSingleKey, singleKey)
-                .one();
+            return findSingleByKey(singleKey);
         }
 
         // save conversation user link
@@ -133,8 +128,14 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         return userIds;
     }
 
+    ImConversation findSingleByKey(String singleKey) {
+        return lambdaQuery()
+            .eq(ImConversation::getSingleKey, singleKey)
+            .one();
+    }
+
     /** 聊天封面图片，为参加聊天的用户头像数组 */
-    private JSONArray getUserImgs(List<String> userIds) {
+    JSONArray getUserImgs(List<String> userIds) {
         JSONArray imgArr = new JSONArray();
         List<User> userList = userBiz.lambdaQuery()
             .in(User::getId, userIds)
