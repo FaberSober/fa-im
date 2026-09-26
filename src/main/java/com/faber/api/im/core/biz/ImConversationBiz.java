@@ -74,8 +74,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     @Transactional
     public ImConversation createNewSingle(ImConversationCreateNewSingleReqVo reqVo) {
         // 将参考单聊的用户IDs进行排序，然后转换为jsonarray
-        List<String> userIds = Arrays.asList(getCurrentUserId(), reqVo.getToUserId());
-        Collections.sort(userIds);
+        List<String> userIds = normalizeSingleUserIds(getCurrentUserId(), reqVo.getToUserId());
         String singleKey = String.join(",", userIds);
         JSONArray userIdArray = new JSONArray(userIds);
         String userIdsStr = userIdArray.toString();
@@ -126,6 +125,12 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         }
 
         return conversation;
+    }
+
+    static List<String> normalizeSingleUserIds(String currentUserId, String toUserId) {
+        List<String> userIds = new ArrayList<>(Arrays.asList(currentUserId, toUserId));
+        Collections.sort(userIds);
+        return userIds;
     }
 
     /** 聊天封面图片，为参加聊天的用户头像数组 */
