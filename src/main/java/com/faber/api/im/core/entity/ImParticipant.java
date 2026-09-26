@@ -8,7 +8,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.faber.core.annotation.FaModalName;
 import com.faber.core.annotation.SqlEquals;
-import com.faber.core.bean.BaseCrtEntity;
+import com.faber.core.bean.BaseTnCrtEntity;
 
 import lombok.Data;
 
@@ -22,7 +22,7 @@ import lombok.Data;
 @FaModalName(name = "IM-会话参与者表")
 @TableName("im_participant")
 @Data
-public class ImParticipant extends BaseCrtEntity {
+public class ImParticipant extends BaseTnCrtEntity {
 
     @ColumnWidth(8)
     @ExcelProperty("ID")

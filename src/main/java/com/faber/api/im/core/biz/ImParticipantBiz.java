@@ -1,9 +1,12 @@
 package com.faber.api.im.core.biz;
 
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
 import com.faber.api.im.core.entity.ImParticipant;
 import com.faber.api.im.core.mapper.ImParticipantMapper;
+import com.faber.core.constant.FaSetting;
+import com.faber.core.context.TenantContext;
 import com.faber.core.exception.BuzzException;
 import com.faber.core.web.biz.BaseBiz;
 
@@ -17,8 +20,12 @@ import com.faber.core.web.biz.BaseBiz;
 @Service
 public class ImParticipantBiz extends BaseBiz<ImParticipantMapper,ImParticipant> {
 
+    @Resource
+    private FaSetting faSetting;
+
     /** 校验当前用户是否属于指定会话。 */
     public ImParticipant requireParticipant(Long conversationId, String userId) {
+        if (faSetting.isTenantEnabled()) TenantContext.requireTenantId();
         if (conversationId == null || userId == null) {
             throw new BuzzException("会话参数不能为空");
         }

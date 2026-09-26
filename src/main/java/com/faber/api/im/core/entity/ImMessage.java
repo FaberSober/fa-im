@@ -13,7 +13,7 @@ import com.faber.api.im.core.enums.ImMessageTypeEnum;
 import com.faber.core.annotation.FaModalName;
 import com.faber.core.annotation.FaPropIgnore;
 import com.faber.core.annotation.SqlEquals;
-import com.faber.core.bean.BaseCrtEntity;
+import com.faber.core.bean.BaseTnCrtEntity;
 
 import lombok.Data;
 
@@ -27,7 +27,7 @@ import lombok.Data;
 @FaModalName(name = "IM-消息表")
 @TableName("im_message")
 @Data
-public class ImMessage extends BaseCrtEntity {
+public class ImMessage extends BaseTnCrtEntity {
 
     @ColumnWidth(8)
     @ExcelProperty("ID")

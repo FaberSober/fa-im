@@ -9,7 +9,7 @@ import com.baomidou.mybatisplus.annotation.TableName;
 import com.faber.api.im.core.enums.ImConversationTypeEnum;
 import com.faber.core.annotation.FaModalName;
 import com.faber.core.annotation.SqlEquals;
-import com.faber.core.bean.BaseDelEntity;
+import com.faber.core.bean.BaseTnDelEntity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 import lombok.Data;
@@ -24,7 +24,7 @@ import lombok.Data;
 @FaModalName(name = "IM-会话表")
 @TableName("im_conversation")
 @Data
-public class ImConversation extends BaseDelEntity {
+public class ImConversation extends BaseTnDelEntity {
 
     @ColumnWidth(8)
     @ExcelProperty("ID")

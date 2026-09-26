@@ -17,6 +17,7 @@ import com.faber.api.base.admin.biz.FileSaveBiz;
 import com.faber.api.base.admin.biz.UserBiz;
 import com.faber.api.base.admin.entity.FileSave;
 import com.faber.api.base.admin.entity.User;
+import com.faber.api.base.tn.biz.TenantUserBiz;
 import com.faber.api.im.core.entity.ImConversation;
 import com.faber.api.im.core.entity.ImMessage;
 import com.faber.api.im.core.entity.ImParticipant;
@@ -34,6 +35,8 @@ import com.faber.api.im.core.vo.req.ImConversationSendMsgReqVo;
 import com.faber.api.im.core.vo.ret.ImConversationRetVo;
 import com.faber.config.websocket.WsHolder;
 import com.faber.core.context.BaseContextHandler;
+import com.faber.core.context.TenantContext;
+import com.faber.core.constant.FaSetting;
 import com.faber.core.enums.WsTypeEnum;
 import com.faber.core.exception.BuzzException;
 import com.faber.core.vo.msg.TableRet;
@@ -62,6 +65,8 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     @Resource FileSaveBiz fileSaveBiz;
     @Resource ImParticipantBiz imParticipantBiz;
     @Resource ImMessageBiz imMessageBiz;
+    @Resource TenantUserBiz tenantUserBiz;
+    @Resource FaSetting faSetting;
 
     /**
      * 创建新的单聊会话
@@ -74,7 +79,13 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     public ImConversation createNewSingle(ImConversationCreateNewSingleReqVo reqVo) {
         // 将参考单聊的用户IDs进行排序，然后转换为jsonarray
         List<String> userIds = normalizeSingleUserIds(getCurrentUserId(), reqVo.getToUserId());
-        String singleKey = String.join(",", userIds);
+        if (userIds.get(0).equals(userIds.get(1))) {
+            throw new BuzzException("不能与自己发起单聊");
+        }
+        requireExistingUsers(userIds);
+        String tenantId = TenantContext.getTenantId();
+        String singleKey = (StrUtil.isBlank(tenantId) ? "g" : "t:" + tenantId)
+            + ":" + String.join(",", userIds);
         JSONArray userIdArray = new JSONArray(userIds);
         String userIdsStr = userIdArray.toString();
 
@@ -346,6 +357,10 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
      * @return
      */
     public List<ImConversationRetVo> listQuery(ImConversationListQueryReqVo reqVo) {
+        if (faSetting.isTenantEnabled() && TenantContext.isSuperAdminWithoutTenant()) {
+            return Collections.emptyList();
+        }
+        requireTenantScope();
         // 查询用户参加的聊天记录
         List<ImConversationRetVo> convList = baseMapper.listQuery(getCurrentUserId(), reqVo);
         return convList;
@@ -511,6 +526,10 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     }
 
     public Integer getUnreadCount() {
+        if (faSetting.isTenantEnabled() && TenantContext.isSuperAdminWithoutTenant()) {
+            return 0;
+        }
+        requireTenantScope();
         return baseMapper.countUnreadByUserId(getCurrentUserId());
     }
 
@@ -554,11 +573,23 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     }
 
     private void requireExistingUsers(List<String> userIds) {
+        requireTenantScope();
         long existingUserCount = userBiz.lambdaQuery()
             .in(User::getId, userIds)
+            .eq(User::getStatus, true)
             .count();
         if (existingUserCount != userIds.size()) {
-            throw new BuzzException("群聊包含不存在的用户");
+            throw new BuzzException("会话包含不存在或不可用的用户");
         }
+        if (!faSetting.isTenantEnabled()) return;
+
+        String tenantId = TenantContext.requireTenantId();
+        if (!tenantUserBiz.getUserIdsByTenantId(tenantId).containsAll(userIds)) {
+            throw new BuzzException("会话成员必须属于当前租户");
+        }
+    }
+
+    private void requireTenantScope() {
+        if (faSetting.isTenantEnabled()) TenantContext.requireTenantId();
     }
 }
