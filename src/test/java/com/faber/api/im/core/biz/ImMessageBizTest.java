@@ -48,6 +48,36 @@ class ImMessageBizTest {
         verifyNoInteractions(mapper);
     }
 
+    @Test
+    void shouldRejectPageSizeAboveMaximumBeforeCheckingParticipant() {
+        BasePageQuery<ImMessagePageQueryVo> query = pageQuery(42L);
+        query.setPageSize(101);
+
+        assertThrows(BuzzException.class, () -> biz.pageQuery(query));
+
+        verifyNoInteractions(participantBiz, mapper);
+    }
+
+    @Test
+    void shouldRejectNonPositivePageNumberBeforeCheckingParticipant() {
+        BasePageQuery<ImMessagePageQueryVo> query = pageQuery(42L);
+        query.setCurrent(0);
+
+        assertThrows(BuzzException.class, () -> biz.pageQuery(query));
+
+        verifyNoInteractions(participantBiz, mapper);
+    }
+
+    @Test
+    void shouldRejectNonPositiveCursorBeforeCheckingParticipant() {
+        BasePageQuery<ImMessagePageQueryVo> query = pageQuery(42L);
+        query.getQuery().setMaxMsgId(0L);
+
+        assertThrows(BuzzException.class, () -> biz.pageQuery(query));
+
+        verifyNoInteractions(participantBiz, mapper);
+    }
+
     private BasePageQuery<ImMessagePageQueryVo> pageQuery(Long conversationId) {
         ImMessagePageQueryVo filter = new ImMessagePageQueryVo();
         filter.setConversationId(conversationId);
