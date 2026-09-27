@@ -384,6 +384,7 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         msg.setSenderId(getCurrentUserId());
         msg.setType(reqVo.getType());
         msg.setContent(normalizeMessageContent(reqVo, msg));
+        msg.setTenantId(TenantContext.getTenantId());
         msg.setIsWithdrawn(false);
         imMessageBiz.save(msg);
 
