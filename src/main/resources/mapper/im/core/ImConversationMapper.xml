@@ -5,9 +5,16 @@
 
     <!-- listQuery --> 
     <select id="listQuery" resultType="com.faber.api.im.core.vo.ret.ImConversationRetVo">
-        SELECT c.*, t.title as conv_title, COALESCE(t.unread_count, 0) as unread_count, t.last_read_message_id
+        SELECT c.*, t.title as conv_title, COALESCE(t.unread_count, 0) as unread_count, t.last_read_message_id,
+            lm.crt_time as last_message_time,
+            (SELECT u.img FROM im_participant p INNER JOIN base_user u ON p.user_id = u.id
+             WHERE c.type = 1 AND p.conversation_id = c.id AND p.user_id != #{userId}
+             LIMIT 1) as peer_avatar
         FROM im_participant t
         INNER JOIN im_conversation c on t.conversation_id = c.id
+        LEFT JOIN im_message lm ON lm.id = (
+            SELECT MAX(m.id) FROM im_message m WHERE m.conversation_id = c.id AND m.deleted = FALSE
+        )
         WHERE c.deleted = FALSE
         AND t.user_id = #{userId}
         <if test="query.conversationId != null">
@@ -16,7 +23,7 @@
         <if test="query.title != null and query.title.trim() != ''">
             and t.title like concat('%', #{query.title}, '%')
         </if>
-        ORDER BY c.upd_time DESC
+        ORDER BY COALESCE(lm.crt_time, c.crt_time) DESC, c.id DESC
     </select>
 
     <!-- countUnreadByUserId --> 

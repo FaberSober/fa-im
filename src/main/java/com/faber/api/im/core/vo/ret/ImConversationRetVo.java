@@ -5,6 +5,7 @@ import com.faber.api.im.core.entity.ImConversation;
 import com.faber.core.annotation.SqlEquals;
 
 import lombok.Data;
+import java.util.Date;
 
 @Data
 public class ImConversationRetVo extends ImConversation {
@@ -19,6 +20,12 @@ public class ImConversationRetVo extends ImConversation {
     // 如用户A与用户B的单聊：针对用户A，会话标题为用户B。针对用户B，会话标题为用户A
     @ExcelProperty("用户标题")
     private String convTitle;
+
+    /** 最后一条未删除消息的发送时间；空会话为空。 */
+    private Date lastMessageTime;
+
+    /** 单聊对方当前头像；群聊使用会话封面。 */
+    private String peerAvatar;
 
 
 }
