@@ -14,4 +14,8 @@ public class ImConversationUpdateReadReqVo implements Serializable {
     @Positive
     private Long conversationId;
 
+    /** 客户端实际展示的最新消息；为空时兼容旧客户端，读取当前最新消息。 */
+    @Positive
+    private Long lastReadMessageId;
+
 }

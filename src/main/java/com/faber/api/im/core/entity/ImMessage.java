@@ -45,6 +45,9 @@ public class ImMessage extends BaseTnCrtEntity {
     @ExcelProperty("类型：1-文本/2-图片/3-视频/4-文件")
     private ImMessageTypeEnum type;
 
+    @ExcelIgnore
+    private String clientMessageId;
+
     @ExcelProperty("消息内容")
     private String content;
 

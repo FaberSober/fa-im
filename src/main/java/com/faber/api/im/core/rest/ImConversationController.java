@@ -119,7 +119,7 @@ public class ImConversationController extends BaseResHandler {
     @RequestMapping(value = "/updateConversationRead", method = RequestMethod.POST)
     @ResponseBody
     public Ret<Boolean> updateConversationRead(@Validated(value = Vg.Crud.C.class) @RequestBody ImConversationUpdateReadReqVo reqVo) {
-        baseBiz.updateConversationRead(getCurrentUserId(), reqVo.getConversationId());
+        baseBiz.updateConversationRead(getCurrentUserId(), reqVo.getConversationId(), reqVo.getLastReadMessageId());
         return ok();
     }
 

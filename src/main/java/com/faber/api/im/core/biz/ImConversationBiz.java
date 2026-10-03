@@ -378,6 +378,16 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         }
         imParticipantBiz.requireParticipant(reqVo.getConversationId(), getCurrentUserId());
 
+        String clientMessageId = reqVo.getClientMessageId();
+        if (clientMessageId != null && !clientMessageId.matches("[A-Za-z0-9_-]{1,64}")) {
+            throw new BuzzException("客户端消息标识格式无效");
+        }
+        // 串行化同一会话的发送，避免两个请求同时检查不存在后插入。
+        // 不捕获唯一冲突继续使用事务，兼容 PostgreSQL 的事务失败语义。
+        if (baseMapper.lockForSend(reqVo.getConversationId()) == null) {
+            throw new BuzzException("会话不存在或已被删除");
+        }
+
         // create new message
         ImMessage msg = new ImMessage();
         msg.setConversationId(reqVo.getConversationId());
@@ -386,6 +396,17 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         msg.setContent(normalizeMessageContent(reqVo, msg));
         msg.setTenantId(TenantContext.getTenantId());
         msg.setIsWithdrawn(false);
+        msg.setClientMessageId(clientMessageId);
+        if (clientMessageId != null) {
+            ImMessage existing = imMessageBiz.findClientMessage(reqVo.getConversationId(), getCurrentUserId(), clientMessageId);
+            if (existing != null) {
+                if (existing.getType() != msg.getType() || !msg.getContent().equals(existing.getContent())) {
+                    throw new BuzzException("客户端消息标识已用于其他消息");
+                }
+                existing.setSenderUserImg(userBiz.getLoginUser().getImg());
+                return existing;
+            }
+        }
         imMessageBiz.save(msg);
 
         // update conversation last message，超过250个字符截断
@@ -502,27 +523,46 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         return normalizedContent.toString();
     }
 
-    /**
-     * 更新聊天已读
-     * @param reqVo
-     */
+    /** 兼容旧调用方，推进到锁定会话后的最新消息。 */
+    @Transactional
     public void updateConversationRead(String userId, Long conversationId) {
+        updateConversationRead(userId, conversationId, null);
+    }
+
+    /** 仅标记客户端展示过的消息；与发送共用会话行锁，避免并发发送被清零。 */
+    @Transactional
+    public void updateConversationRead(String userId, Long conversationId, Long lastReadMessageId) {
+        requireTenantScope();
+        if (conversationId == null || conversationId <= 0 || userId == null) {
+            throw new BuzzException("会话参数无效");
+        }
+        if (lastReadMessageId != null && lastReadMessageId <= 0) {
+            throw new BuzzException("消息ID必须为正数");
+        }
         imParticipantBiz.requireParticipant(conversationId, userId);
-
-        // 查询最新的消息
-        ImMessage lastMsg = imMessageBiz.lambdaQuery()
-            .eq(ImMessage::getConversationId, conversationId)
-            .orderByDesc(ImMessage::getId)
-            .last("limit 1")
-            .one();
-        Long lastReadMessageId = lastMsg == null ? null : lastMsg.getId();
-
-        // 更新用户关联的聊天记录已读数量为0
+        if (baseMapper.lockForSend(conversationId) == null) {
+            throw new BuzzException("会话不存在或已被删除");
+        }
+        ImParticipant participant = imParticipantBiz.requireParticipantForUpdate(conversationId, userId);
+        var query = imMessageBiz.lambdaQuery().eq(ImMessage::getConversationId, conversationId);
+        if (lastReadMessageId == null) {
+            query.orderByDesc(ImMessage::getId).last("LIMIT 1 FOR UPDATE");
+        } else {
+            query.eq(ImMessage::getId, lastReadMessageId).last("FOR UPDATE");
+        }
+        ImMessage readMessage = query.one();
+        if (lastReadMessageId != null && readMessage == null) {
+            throw new BuzzException("已读消息不存在或不属于该会话");
+        }
+        Long previousId = participant.getLastReadMessageId();
+        Long cursor = readMessage == null ? previousId : readMessage.getId();
+        if (previousId != null && (cursor == null || previousId > cursor)) cursor = previousId;
+        Long unreadCount = imMessageBiz.countUnreadForUpdate(conversationId, userId, cursor == null ? 0L : cursor);
         imParticipantBiz.lambdaUpdate()
             .eq(ImParticipant::getConversationId, conversationId)
             .eq(ImParticipant::getUserId, userId)
-            .set(ImParticipant::getUnreadCount, 0)
-            .set(ImParticipant::getLastReadMessageId, lastReadMessageId)
+            .set(ImParticipant::getUnreadCount, Math.toIntExact(unreadCount))
+            .set(ImParticipant::getLastReadMessageId, cursor)
             .update();
     }
 
