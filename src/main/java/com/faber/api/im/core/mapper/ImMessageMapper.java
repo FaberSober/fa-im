@@ -1,6 +1,7 @@
 package com.faber.api.im.core.mapper;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -8,6 +9,7 @@ import org.apache.ibatis.annotations.Select;
 import com.faber.api.im.core.entity.ImMessage;
 import com.faber.api.im.core.vo.req.ImMessagePageQueryVo;
 import com.faber.api.im.core.vo.req.ImMessageListAfterReqVo;
+import com.faber.api.im.core.vo.ret.ImMessageSearchRetVo;
 import com.faber.core.config.mybatis.base.FaBaseMapper;
 
 /**
@@ -35,5 +37,15 @@ public interface ImMessageMapper extends FaBaseMapper<ImMessage> {
     List<ImMessage> pageQuery(@Param("query") ImMessagePageQueryVo queryVo);
 
     List<ImMessage> listAfter(@Param("query") ImMessageListAfterReqVo queryVo);
+
+    List<ImMessageSearchRetVo> searchText(@Param("conversationId") Long conversationId,
+        @Param("escapedKeyword") String escapedKeyword, @Param("senderId") String senderId,
+        @Param("startTime") LocalDateTime startTime, @Param("endTimeExclusive") LocalDateTime endTimeExclusive);
+
+    ImMessage contextTarget(@Param("conversationId") Long conversationId, @Param("messageId") Long messageId);
+
+    List<ImMessage> contextBefore(@Param("conversationId") Long conversationId, @Param("messageId") Long messageId);
+
+    List<ImMessage> contextAfter(@Param("conversationId") Long conversationId, @Param("messageId") Long messageId);
 
 }

@@ -21,6 +21,14 @@ public class ImConversationRetVo extends ImConversation {
     @ExcelProperty("用户标题")
     private String convTitle;
 
+    /** 当前用户的个人置顶设置。 */
+    private Boolean pinned;
+
+    /** 当前用户的个人消息免打扰设置。 */
+    private Boolean muted;
+
+    private Date pinnedTime;
+
     /** 最后一条未删除消息的发送时间；空会话为空。 */
     private Date lastMessageTime;
 

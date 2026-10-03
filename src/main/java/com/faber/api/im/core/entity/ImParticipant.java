@@ -11,6 +11,7 @@ import com.faber.core.annotation.SqlEquals;
 import com.faber.core.bean.BaseTnCrtEntity;
 
 import lombok.Data;
+import java.util.Date;
 
 /**
  * IM-会话参与者表
@@ -47,6 +48,15 @@ public class ImParticipant extends BaseTnCrtEntity {
     // 如用户A与用户B的单聊：针对用户A，会话标题为用户B。针对用户B，会话标题为用户A
     @ExcelProperty("用户标题")
     private String title;
+
+    @ExcelProperty("个人消息免打扰")
+    private Boolean muted;
+
+    @ExcelProperty("个人置顶")
+    private Boolean pinned;
+
+    @ExcelProperty("个人置顶时间")
+    private Date pinnedTime;
 
     // ----------------- show cols -----------------
     @TableField(exist = false)

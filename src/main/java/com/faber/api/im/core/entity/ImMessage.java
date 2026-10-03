@@ -66,6 +66,11 @@ public class ImMessage extends BaseTnCrtEntity {
     private Boolean deleted;
 
     // ------------- show cols -------------
+    /** WebSocket 接收者通知提示开关；不持久化，不影响消息同步。 */
+    @TableField(exist = false)
+    @ExcelIgnore
+    private Boolean notificationEnabled;
+
     @TableField(exist = false)
     @ExcelProperty("发送用户头像")
     private String senderUserImg;

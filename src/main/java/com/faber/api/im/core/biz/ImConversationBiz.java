@@ -3,11 +3,13 @@ package com.faber.api.im.core.biz;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -32,6 +34,8 @@ import com.faber.api.im.core.vo.req.ImConversationListQueryReqVo;
 import com.faber.api.im.core.vo.req.ImConversationRemoveGroupUsersReqVo;
 import com.faber.api.im.core.vo.req.ImConversationRenameReqVo;
 import com.faber.api.im.core.vo.req.ImConversationSendMsgReqVo;
+import com.faber.api.im.core.vo.req.ImConversationUpdatePinnedReqVo;
+import com.faber.api.im.core.vo.req.ImConversationUpdateMutedReqVo;
 import com.faber.api.im.core.vo.ret.ImConversationRetVo;
 import com.faber.config.websocket.WsHolder;
 import com.faber.core.context.BaseContextHandler;
@@ -168,11 +172,30 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     public ImConversation createNewGroup(ImConversationCreateNewGroupReqVo reqVo) {
         List<String> userIds = normalizeUserIds(reqVo.getUserIds());
         String currentUserId = getCurrentUserId();
+        if (reqVo.getSourceConversationId() != null) {
+            Long sourceId = reqVo.getSourceConversationId();
+            if (sourceId <= 0) throw new BuzzException("源会话ID必须为正数");
+            imParticipantBiz.requireParticipant(sourceId, currentUserId);
+            ImConversation source = getById(sourceId);
+            if (source == null || source.getType() != ImConversationTypeEnum.SINGLE) {
+                throw new BuzzException("源会话必须为单聊");
+            }
+            List<String> sourceUserIds = getParticipantUserIds(sourceId);
+            if (sourceUserIds.size() != 2 || !sourceUserIds.contains(currentUserId)) {
+                throw new BuzzException("源单聊成员数据不完整");
+            }
+            LinkedHashSet<String> members = new LinkedHashSet<>(sourceUserIds);
+            members.addAll(userIds);
+            userIds = new ArrayList<>(members);
+        }
         if (!userIds.contains(currentUserId)) {
             userIds.add(0, currentUserId);
         }
         if (userIds.size() < 3) {
             throw new BuzzException("群聊最少添加三位用户");
+        }
+        if (userIds.size() > 100) {
+            throw new BuzzException("群聊最多添加一百位用户");
         }
         requireExistingUsers(userIds);
 
@@ -215,16 +238,21 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
     public ImConversation addGroupUsers(ImConversationAddGroupUsersReqVo reqVo) {
         Long conversationId = reqVo.getConversationId();
         ImConversation conversation = requireGroupParticipant(conversationId, getCurrentUserId());
+        if (baseMapper.lockForSend(conversationId) == null) {
+            throw new BuzzException("群聊不存在");
+        }
+        imParticipantBiz.requireParticipantForUpdate(conversationId, getCurrentUserId());
         List<String> requestedUserIds = normalizeUserIds(reqVo.getUserIds());
         requireExistingUsers(requestedUserIds);
 
         // 过滤已经参加该群聊的用户
         List<String> inUserIdList = imParticipantBiz.lambdaQuery()
             .eq(ImParticipant::getConversationId, conversationId)
-            .in(ImParticipant::getUserId, requestedUserIds)
             .select(ImParticipant::getUserId)
+            .orderByAsc(ImParticipant::getCrtTime, ImParticipant::getUserId)
+            .last("FOR UPDATE")
             .list()
-            .stream().map(i -> i.getUserId()).toList();
+            .stream().map(ImParticipant::getUserId).toList();
         List<String> addUserIds = requestedUserIds.stream()
             .filter(i -> !inUserIdList.contains(i))
             .toList();
@@ -244,26 +272,18 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         }
         imParticipantBiz.saveBatch(participantList);
 
-        // update conversation cover
-        List<String> coverUserIds = imParticipantBiz.lambdaQuery()
-            .eq(ImParticipant::getConversationId, conversationId)
-            .select(ImParticipant::getUserId)
-            .orderByAsc(ImParticipant::getCrtTime, ImParticipant::getUserId)
-            .last("limit 9") // 群聊封面最多展示9个用户头像
-            .list()
-            .stream().map(i -> i.getUserId()).toList();
-
-        // 更新群聊头像
-        JSONArray imgArr = getUserImgs(coverUserIds);
+        List<String> participantUserIds = new ArrayList<>(inUserIdList);
+        participantUserIds.addAll(addUserIds);
+        // 持锁后以当前成员记录构造封面和成员缓存，避免并发邀请使用旧快照。
+        JSONArray imgArr = getUserImgs(participantUserIds.stream().limit(9).toList());
         conversation.setCover(imgArr.toString());
-
+        conversation.setUserIds(new JSONArray(participantUserIds).toString());
         this.lambdaUpdate()
             .eq(ImConversation::getId, conversation.getId())
-            .set(ImConversation::getCover, imgArr.toString())
+            .set(ImConversation::getCover, conversation.getCover())
+            .set(ImConversation::getUserIds, conversation.getUserIds())
             .update();
 
-        List<String> participantUserIds = getParticipantUserIds(conversationId);
-        conversation.setUserIds(new JSONArray(participantUserIds).toString());
         sendAfterCommit(participantUserIds, WsTypeEnum.IM_REFRESH_GROUP_CHAT, conversation);
 
         return conversation;
@@ -437,16 +457,24 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         // update unread count
         baseMapper.updateUnreadByConvId(reqVo.getConversationId(), getCurrentUserId());
 
-        // get conversation participants
+        // 会话锁后采用当前读，避免旧快照遗漏已提交的个人免打扰设置。
         List<ImParticipant> convList = imParticipantBiz.lambdaQuery()
             .eq(ImParticipant::getConversationId, reqVo.getConversationId())
+            .last("FOR UPDATE")
             .list();
-        // get userIds except senderId
-        List<String> userIds = convList.stream().map(ImParticipant::getUserId).filter(userId -> !userId.equals(getCurrentUserId())).toList();
-
-        // send message throw websocket
+        // 所有接收者仍获得 IM 数据事件；免打扰仅关闭提示，不丢失同步消息。
         msg.setSenderUserImg(userBiz.getLoginUser().getImg());
-        sendAfterCommit(userIds, WsTypeEnum.IM, msg);
+        for (boolean notificationEnabled : new boolean[]{true, false}) {
+            List<String> userIds = convList.stream()
+                .filter(participant -> !getCurrentUserId().equals(participant.getUserId()))
+                .filter(participant -> Boolean.TRUE.equals(participant.getMuted()) != notificationEnabled)
+                .map(ImParticipant::getUserId).distinct().toList();
+            if (userIds.isEmpty()) continue;
+            ImMessage event = new ImMessage();
+            BeanUtils.copyProperties(msg, event);
+            event.setNotificationEnabled(notificationEnabled);
+            sendAfterCommit(userIds, WsTypeEnum.IM, event);
+        }
 
         return msg;
     }
@@ -514,6 +542,10 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             ext = ext.substring(1);
         }
 
+        if (reqVo.getType() == ImMessageTypeEnum.IMAGE) {
+            validateImageAttachment(fileSave, ext);
+        }
+
         JSONObject normalizedContent = new JSONObject();
         normalizedContent.set("fileId", fileId);
         normalizedContent.set("fileName", fileSave.getOriginalFilename());
@@ -521,6 +553,22 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         normalizedContent.set("ext", ext.toLowerCase(Locale.ROOT));
         msg.setFileId(fileId);
         return normalizedContent.toString();
+    }
+
+    /** 图片只接受当前用户上传的安全图片，限制与移动端一致（20 MiB）。 */
+    private void validateImageAttachment(FileSave fileSave, String ext) {
+        if (Boolean.TRUE.equals(fileSave.getDeleted()) || !getCurrentUserId().equals(fileSave.getCrtUser())) {
+            throw new BuzzException("只能发送自己上传且未删除的图片");
+        }
+        String normalizedExt = ext.toLowerCase(Locale.ROOT);
+        String contentType = StrUtil.trim(StrUtil.nullToEmpty(fileSave.getContentType())).toLowerCase(Locale.ROOT);
+        if (!List.of("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp").contains(normalizedExt)
+            || !contentType.startsWith("image/") || contentType.startsWith("image/svg")) {
+            throw new BuzzException("附件不是支持的图片格式");
+        }
+        if (fileSave.getSize() <= 0 || fileSave.getSize() > 20L * 1024 * 1024) {
+            throw new BuzzException("图片大小必须大于0且不超过20MB");
+        }
     }
 
     /** 兼容旧调用方，推进到锁定会话后的最新消息。 */
@@ -563,6 +611,59 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             .eq(ImParticipant::getUserId, userId)
             .set(ImParticipant::getUnreadCount, Math.toIntExact(unreadCount))
             .set(ImParticipant::getLastReadMessageId, cursor)
+            .update();
+    }
+
+    /** 个人置顶只修改当前用户的参与记录，不影响其他成员。 */
+    @Transactional
+    public void updateConversationPinned(ImConversationUpdatePinnedReqVo reqVo) {
+        requireTenantScope();
+        String userId = getCurrentUserId();
+        if (reqVo == null || reqVo.getConversationId() == null || reqVo.getConversationId() <= 0
+                || reqVo.getPinned() == null || StrUtil.isBlank(userId)) {
+            throw new BuzzException("会话置顶参数无效");
+        }
+        Long conversationId = reqVo.getConversationId();
+        imParticipantBiz.requireParticipant(conversationId, userId);
+        if (baseMapper.lockForSend(conversationId) == null) {
+            throw new BuzzException("会话不存在或已被删除");
+        }
+        ImParticipant participant = imParticipantBiz.requireParticipantForUpdate(conversationId, userId);
+        boolean pinned = reqVo.getPinned();
+        // 重复开启不改变排序时间，重复关闭也不产生额外写入。
+        if (pinned == Boolean.TRUE.equals(participant.getPinned())
+                && (pinned ? participant.getPinnedTime() != null : participant.getPinnedTime() == null)) return;
+        Date pinnedTime = pinned ? new Date() : null;
+        imParticipantBiz.lambdaUpdate()
+            .eq(ImParticipant::getId, participant.getId())
+            .eq(ImParticipant::getConversationId, conversationId)
+            .eq(ImParticipant::getUserId, userId)
+            .set(ImParticipant::getPinned, pinned)
+            .set(ImParticipant::getPinnedTime, pinnedTime)
+            .update();
+    }
+
+    /** 个人免打扰只修改当前用户参与记录，保留会话未读数和已读游标。 */
+    @Transactional
+    public void updateConversationMuted(ImConversationUpdateMutedReqVo reqVo) {
+        requireTenantScope();
+        String userId = getCurrentUserId();
+        if (reqVo == null || reqVo.getConversationId() == null || reqVo.getConversationId() <= 0
+                || reqVo.getMuted() == null || StrUtil.isBlank(userId)) {
+            throw new BuzzException("消息免打扰参数无效");
+        }
+        Long conversationId = reqVo.getConversationId();
+        imParticipantBiz.requireParticipant(conversationId, userId);
+        if (baseMapper.lockForSend(conversationId) == null) {
+            throw new BuzzException("会话不存在或已被删除");
+        }
+        ImParticipant participant = imParticipantBiz.requireParticipantForUpdate(conversationId, userId);
+        if (reqVo.getMuted() == Boolean.TRUE.equals(participant.getMuted())) return;
+        imParticipantBiz.lambdaUpdate()
+            .eq(ImParticipant::getId, participant.getId())
+            .eq(ImParticipant::getConversationId, conversationId)
+            .eq(ImParticipant::getUserId, userId)
+            .set(ImParticipant::getMuted, reqVo.getMuted())
             .update();
     }
 

@@ -25,6 +25,8 @@ import com.faber.api.im.core.vo.req.ImConversationRemoveGroupUsersReqVo;
 import com.faber.api.im.core.vo.req.ImConversationRenameReqVo;
 import com.faber.api.im.core.vo.req.ImConversationSendMsgReqVo;
 import com.faber.api.im.core.vo.req.ImConversationUpdateReadReqVo;
+import com.faber.api.im.core.vo.req.ImConversationUpdatePinnedReqVo;
+import com.faber.api.im.core.vo.req.ImConversationUpdateMutedReqVo;
 import com.faber.api.im.core.vo.ret.ImConversationRetVo;
 import com.faber.core.annotation.FaLogBiz;
 import com.faber.core.annotation.FaLogOpr;
@@ -120,6 +122,22 @@ public class ImConversationController extends BaseResHandler {
     @ResponseBody
     public Ret<Boolean> updateConversationRead(@Validated(value = Vg.Crud.C.class) @RequestBody ImConversationUpdateReadReqVo reqVo) {
         baseBiz.updateConversationRead(getCurrentUserId(), reqVo.getConversationId(), reqVo.getLastReadMessageId());
+        return ok();
+    }
+
+    @FaLogOpr(value = "更新个人聊天置顶", crud = LogCrudEnum.U)
+    @RequestMapping(value = "/updateConversationPinned", method = RequestMethod.POST)
+    @ResponseBody
+    public Ret<Boolean> updateConversationPinned(@Validated @RequestBody ImConversationUpdatePinnedReqVo reqVo) {
+        baseBiz.updateConversationPinned(reqVo);
+        return ok();
+    }
+
+    @FaLogOpr(value = "更新个人消息免打扰", crud = LogCrudEnum.U)
+    @RequestMapping(value = "/updateConversationMuted", method = RequestMethod.POST)
+    @ResponseBody
+    public Ret<Boolean> updateConversationMuted(@Validated @RequestBody ImConversationUpdateMutedReqVo reqVo) {
+        baseBiz.updateConversationMuted(reqVo);
         return ok();
     }
 
