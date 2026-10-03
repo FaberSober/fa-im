@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
-/** 会话内文本搜索。关键词长度在去除首尾空格后校验。 */
+/** 会话内搜索筛选。文本模式关键词在去除首尾空格后校验；图片模式只接受空关键词。 */
 @Data
 public class ImMessageSearchTextReqVo implements Serializable {
 

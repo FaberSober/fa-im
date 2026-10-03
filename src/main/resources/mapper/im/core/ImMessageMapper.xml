@@ -40,6 +40,11 @@
         <if test="escapedKeyword != null">
           AND LOWER(t.content) LIKE LOWER(CONCAT('%', #{escapedKeyword}, '%')) ESCAPE '!'
         </if>
+        <include refid="searchSenderAndDates"/>
+        ORDER BY t.id DESC
+    </select>
+
+    <sql id="searchSenderAndDates">
         <if test="senderId != null">
           AND t.sender_id = #{senderId}
         </if>
@@ -49,6 +54,17 @@
         <if test="endTimeExclusive != null">
           AND t.crt_time &lt; #{endTimeExclusive}
         </if>
+    </sql>
+
+    <select id="searchImages" resultType="com.faber.api.im.core.vo.ret.ImMessageSearchRetVo">
+        SELECT t.*, u.img as sender_user_img, u.name as sender_name
+        FROM im_message t
+        LEFT JOIN base_user u ON t.sender_id = u.id
+        WHERE t.deleted = false
+          AND t.conversation_id = #{conversationId}
+          AND t.type = 2
+          AND (t.is_withdrawn = false OR t.is_withdrawn IS NULL)
+        <include refid="searchSenderAndDates"/>
         ORDER BY t.id DESC
     </select>
 

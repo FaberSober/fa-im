@@ -77,6 +77,15 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
 
     /** 当前成员可搜索会话全部历史；不修改已读状态。 */
     public TableRet<ImMessageSearchRetVo> searchText(BasePageQuery<ImMessageSearchTextReqVo> query) {
+        return searchMessages(query, false);
+    }
+
+    /** 浏览或筛选会话图片；不修改已读状态。 */
+    public TableRet<ImMessageSearchRetVo> searchImages(BasePageQuery<ImMessageSearchTextReqVo> query) {
+        return searchMessages(query, true);
+    }
+
+    private TableRet<ImMessageSearchRetVo> searchMessages(BasePageQuery<ImMessageSearchTextReqVo> query, boolean images) {
         if (query == null || query.getQuery() == null || query.getQuery().getConversationId() == null
                 || query.getQuery().getConversationId() <= 0) {
             throw new BuzzException("会话ID必须为正数");
@@ -87,6 +96,9 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
         var filters = query.getQuery();
         String keyword = normalizedSearchValue(filters.getKeyword());
         String senderId = normalizedSearchValue(filters.getSenderId());
+        if (images && keyword != null) {
+            throw new BuzzException("图片搜索不支持文本关键词");
+        }
         if (keyword != null && keyword.length() > 100) {
             throw new BuzzException("搜索关键词最多100字");
         }
@@ -98,7 +110,7 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
             throw new BuzzException("开始日期不能晚于结束日期");
         }
-        if (keyword == null && senderId == null && startDate == null && endDate == null) {
+        if (!images && keyword == null && senderId == null && startDate == null && endDate == null) {
             throw new BuzzException("请填写关键词或选择成员、日期筛选");
         }
         Long conversationId = filters.getConversationId();
@@ -108,7 +120,13 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
         LocalDateTime startTime = startDate == null ? null : startDate.atStartOfDay();
         LocalDateTime endTimeExclusive = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
         PageInfo<ImMessageSearchRetVo> info = PageHelper.startPage(query.getCurrent(), query.getPageSize())
-                .doSelectPageInfo(() -> baseMapper.searchText(conversationId, escapedKeyword, senderId, startTime, endTimeExclusive));
+                .doSelectPageInfo(() -> {
+                    if (images) {
+                        baseMapper.searchImages(conversationId, senderId, startTime, endTimeExclusive);
+                    } else {
+                        baseMapper.searchText(conversationId, escapedKeyword, senderId, startTime, endTimeExclusive);
+                    }
+                });
         return new TableRet<>(info);
     }
 

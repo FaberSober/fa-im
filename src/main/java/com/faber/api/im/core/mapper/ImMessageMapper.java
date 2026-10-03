@@ -42,6 +42,10 @@ public interface ImMessageMapper extends FaBaseMapper<ImMessage> {
         @Param("escapedKeyword") String escapedKeyword, @Param("senderId") String senderId,
         @Param("startTime") LocalDateTime startTime, @Param("endTimeExclusive") LocalDateTime endTimeExclusive);
 
+    List<ImMessageSearchRetVo> searchImages(@Param("conversationId") Long conversationId,
+        @Param("senderId") String senderId, @Param("startTime") LocalDateTime startTime,
+        @Param("endTimeExclusive") LocalDateTime endTimeExclusive);
+
     ImMessage contextTarget(@Param("conversationId") Long conversationId, @Param("messageId") Long messageId);
 
     List<ImMessage> contextBefore(@Param("conversationId") Long conversationId, @Param("messageId") Long messageId);
