@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import lombok.Data;
 
-/** 会话内搜索筛选。文本模式关键词在去除首尾空格后校验；图片模式只接受空关键词。 */
+/** 会话内搜索筛选。文件模式按文件名及扩展名查询；图片模式只接受空关键词。 */
 @Data
 public class ImMessageSearchTextReqVo implements Serializable {
 
@@ -14,6 +14,9 @@ public class ImMessageSearchTextReqVo implements Serializable {
     private Long conversationId;
 
     private String keyword;
+
+    /** 仅文件模式使用，按扩展名精确匹配，允许前导点。 */
+    private String fileExt;
 
     private String senderId;
 

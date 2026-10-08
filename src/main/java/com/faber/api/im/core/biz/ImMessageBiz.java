@@ -4,6 +4,7 @@ import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
 import com.faber.api.im.core.entity.ImMessage;
+import com.faber.api.im.core.enums.ImMessageTypeEnum;
 import com.faber.api.im.core.mapper.ImMessageMapper;
 import com.faber.api.im.core.vo.req.ImMessagePageQueryVo;
 import com.faber.api.im.core.vo.req.ImMessageListAfterReqVo;
@@ -77,15 +78,20 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
 
     /** 当前成员可搜索会话全部历史；不修改已读状态。 */
     public TableRet<ImMessageSearchRetVo> searchText(BasePageQuery<ImMessageSearchTextReqVo> query) {
-        return searchMessages(query, false);
+        return searchMessages(query, ImMessageTypeEnum.TEXT);
     }
 
     /** 浏览或筛选会话图片；不修改已读状态。 */
     public TableRet<ImMessageSearchRetVo> searchImages(BasePageQuery<ImMessageSearchTextReqVo> query) {
-        return searchMessages(query, true);
+        return searchMessages(query, ImMessageTypeEnum.IMAGE);
     }
 
-    private TableRet<ImMessageSearchRetVo> searchMessages(BasePageQuery<ImMessageSearchTextReqVo> query, boolean images) {
+    /** 按文件名和扩展名浏览或筛选会话文件；不修改已读状态。 */
+    public TableRet<ImMessageSearchRetVo> searchFiles(BasePageQuery<ImMessageSearchTextReqVo> query) {
+        return searchMessages(query, ImMessageTypeEnum.FILE);
+    }
+
+    private TableRet<ImMessageSearchRetVo> searchMessages(BasePageQuery<ImMessageSearchTextReqVo> query, ImMessageTypeEnum type) {
         if (query == null || query.getQuery() == null || query.getQuery().getConversationId() == null
                 || query.getQuery().getConversationId() <= 0) {
             throw new BuzzException("会话ID必须为正数");
@@ -96,7 +102,7 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
         var filters = query.getQuery();
         String keyword = normalizedSearchValue(filters.getKeyword());
         String senderId = normalizedSearchValue(filters.getSenderId());
-        if (images && keyword != null) {
+        if (type == ImMessageTypeEnum.IMAGE && keyword != null) {
             throw new BuzzException("图片搜索不支持文本关键词");
         }
         if (keyword != null && keyword.length() > 100) {
@@ -105,12 +111,19 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
         if (senderId != null && senderId.length() > 100) {
             throw new BuzzException("发送者ID最多100字");
         }
+        String fileExt = normalizedSearchValue(filters.getFileExt());
+        if (fileExt != null) {
+            if (type != ImMessageTypeEnum.FILE) throw new BuzzException("仅文件搜索支持扩展名筛选");
+            if (fileExt.startsWith(".")) fileExt = fileExt.substring(1);
+            if (!fileExt.matches("[A-Za-z0-9]{1,12}")) throw new BuzzException("文件类型须为1至12位字母或数字扩展名");
+            fileExt = fileExt.toLowerCase(java.util.Locale.ROOT);
+        }
         LocalDate startDate = parseSearchDate(filters.getStartDate());
         LocalDate endDate = parseSearchDate(filters.getEndDate());
         if (startDate != null && endDate != null && startDate.isAfter(endDate)) {
             throw new BuzzException("开始日期不能晚于结束日期");
         }
-        if (!images && keyword == null && senderId == null && startDate == null && endDate == null) {
+        if (type == ImMessageTypeEnum.TEXT && keyword == null && senderId == null && startDate == null && endDate == null) {
             throw new BuzzException("请填写关键词或选择成员、日期筛选");
         }
         Long conversationId = filters.getConversationId();
@@ -119,10 +132,13 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
         String escapedKeyword = keyword == null ? null : keyword.replace("!", "!!").replace("%", "!%").replace("_", "!_");
         LocalDateTime startTime = startDate == null ? null : startDate.atStartOfDay();
         LocalDateTime endTimeExclusive = endDate == null ? null : endDate.plusDays(1).atStartOfDay();
+        String normalizedExt = fileExt;
         PageInfo<ImMessageSearchRetVo> info = PageHelper.startPage(query.getCurrent(), query.getPageSize())
                 .doSelectPageInfo(() -> {
-                    if (images) {
+                    if (type == ImMessageTypeEnum.IMAGE) {
                         baseMapper.searchImages(conversationId, senderId, startTime, endTimeExclusive);
+                    } else if (type == ImMessageTypeEnum.FILE) {
+                        baseMapper.searchFiles(conversationId, escapedKeyword, normalizedExt, senderId, startTime, endTimeExclusive);
                     } else {
                         baseMapper.searchText(conversationId, escapedKeyword, senderId, startTime, endTimeExclusive);
                     }

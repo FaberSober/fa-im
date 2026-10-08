@@ -68,6 +68,25 @@
         ORDER BY t.id DESC
     </select>
 
+    <select id="searchFiles" resultType="com.faber.api.im.core.vo.ret.ImMessageSearchRetVo">
+        SELECT t.*, u.img as sender_user_img, u.name as sender_name
+        FROM im_message t
+        LEFT JOIN base_user u ON t.sender_id = u.id
+        LEFT JOIN base_file_save f ON t.file_id = f.id AND f.deleted = false
+        WHERE t.deleted = false
+          AND t.conversation_id = #{conversationId}
+          AND t.type = 4
+          AND (t.is_withdrawn = false OR t.is_withdrawn IS NULL)
+        <if test="escapedKeyword != null">
+          AND LOWER(f.original_filename) LIKE LOWER(CONCAT('%', #{escapedKeyword}, '%')) ESCAPE '!'
+        </if>
+        <if test="fileExt != null">
+          AND LOWER(REPLACE(TRIM(f.ext), '.', '')) = #{fileExt}
+        </if>
+        <include refid="searchSenderAndDates"/>
+        ORDER BY t.id DESC
+    </select>
+
     <select id="contextTarget" resultType="com.faber.api.im.core.entity.ImMessage">
         SELECT t.*, u.img as sender_user_img
         FROM im_message t
