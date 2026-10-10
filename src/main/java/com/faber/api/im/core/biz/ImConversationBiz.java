@@ -446,6 +446,9 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
             case FILE:
                 lastMsg = BaseContextHandler.getName() + ":" + "文件";
                 break;
+            case VOICE:
+                lastMsg = BaseContextHandler.getName() + ":语音";
+                break;
             default:
                 break;
         }
@@ -551,6 +554,20 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         normalizedContent.set("fileName", fileSave.getOriginalFilename());
         normalizedContent.set("fileSize", fileSave.getSize());
         normalizedContent.set("ext", ext.toLowerCase(Locale.ROOT));
+        if (reqVo.getType() == ImMessageTypeEnum.VOICE) {
+            Integer duration;
+            try { duration = Integer.valueOf(String.valueOf(requestContent.get("duration"))); }
+            catch (Exception e) { throw new BuzzException("语音时长无效"); }
+            if (duration == null || duration < 1 || duration > 60) throw new BuzzException("语音时长须为1至60秒");
+            if (Boolean.TRUE.equals(fileSave.getDeleted()) || !getCurrentUserId().equals(fileSave.getCrtUser())) {
+                throw new BuzzException("只能发送自己上传的语音");
+            }
+            if (!List.of("aac", "m4a", "mp3", "wav").contains(ext.toLowerCase(Locale.ROOT))
+                    || fileSave.getSize() <= 0 || fileSave.getSize() > 10L * 1024 * 1024) {
+                throw new BuzzException("语音格式不支持或超过10MB");
+            }
+            normalizedContent.set("duration", duration);
+        }
         msg.setFileId(fileId);
         return normalizedContent.toString();
     }

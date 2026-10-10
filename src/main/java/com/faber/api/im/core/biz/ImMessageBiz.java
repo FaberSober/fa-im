@@ -86,6 +86,10 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
         return searchMessages(query, ImMessageTypeEnum.IMAGE);
     }
 
+    public TableRet<ImMessageSearchRetVo> searchVoices(BasePageQuery<ImMessageSearchTextReqVo> query) {
+        return searchMessages(query, ImMessageTypeEnum.VOICE);
+    }
+
     /** 按文件名和扩展名浏览或筛选会话文件；不修改已读状态。 */
     public TableRet<ImMessageSearchRetVo> searchFiles(BasePageQuery<ImMessageSearchTextReqVo> query) {
         return searchMessages(query, ImMessageTypeEnum.FILE);
@@ -102,8 +106,8 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
         var filters = query.getQuery();
         String keyword = normalizedSearchValue(filters.getKeyword());
         String senderId = normalizedSearchValue(filters.getSenderId());
-        if (type == ImMessageTypeEnum.IMAGE && keyword != null) {
-            throw new BuzzException("图片搜索不支持文本关键词");
+        if ((type == ImMessageTypeEnum.IMAGE || type == ImMessageTypeEnum.VOICE) && keyword != null) {
+            throw new BuzzException("图片和语音搜索不支持文本关键词");
         }
         if (keyword != null && keyword.length() > 100) {
             throw new BuzzException("搜索关键词最多100字");
@@ -137,6 +141,8 @@ public class ImMessageBiz extends BaseBiz<ImMessageMapper,ImMessage> {
                 .doSelectPageInfo(() -> {
                     if (type == ImMessageTypeEnum.IMAGE) {
                         baseMapper.searchImages(conversationId, senderId, startTime, endTimeExclusive);
+                    } else if (type == ImMessageTypeEnum.VOICE) {
+                        baseMapper.searchVoices(conversationId, senderId, startTime, endTimeExclusive);
                     } else if (type == ImMessageTypeEnum.FILE) {
                         baseMapper.searchFiles(conversationId, escapedKeyword, normalizedExt, senderId, startTime, endTimeExclusive);
                     } else {

@@ -74,6 +74,14 @@ public class ImMessageController extends BaseResHandler {
         return baseBiz.searchImages(query);
     }
 
+    @FaLogOpr(value = "搜索聊天语音", crud = LogCrudEnum.R)
+    @LogNoRet
+    @RequestMapping(value = "/searchVoices", method = RequestMethod.POST)
+    @ResponseBody
+    public TableRet<ImMessageSearchRetVo> searchVoices(@Valid @RequestBody BasePageQuery<ImMessageSearchTextReqVo> query) {
+        return baseBiz.searchVoices(query);
+    }
+
     @FaLogOpr(value = "搜索聊天文件", crud = LogCrudEnum.R)
     @LogNoRet
     @RequestMapping(value = "/searchFiles", method = RequestMethod.POST)
