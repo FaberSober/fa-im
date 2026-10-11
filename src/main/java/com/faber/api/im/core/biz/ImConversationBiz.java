@@ -429,28 +429,27 @@ public class ImConversationBiz extends BaseBiz<ImConversationMapper,ImConversati
         }
         imMessageBiz.save(msg);
 
-        // update conversation last message，超过250个字符截断
-        String lastMsg = BaseContextHandler.getName() + ":" + reqVo.getContent();
-        // 如果lastMsg超过250个字符，则截断
-        if (lastMsg.length() > 250) {
-            lastMsg = lastMsg.substring(0, 250);
-        }
-        // 文件类型
-        switch (reqVo.getType()) {
+        // 使用已校验的消息内容生成摘要，刷新会话后与实时展示保持一致。
+        String summary = msg.getContent();
+        switch (msg.getType()) {
             case IMAGE:
-                lastMsg = BaseContextHandler.getName() + ":" + "图片";
+                summary = "[图片]";
                 break;
             case VIDEO:
-                lastMsg = BaseContextHandler.getName() + ":" + "视频";
+                summary = "[视频]";
                 break;
             case FILE:
-                lastMsg = BaseContextHandler.getName() + ":" + "文件";
+                summary = "[文件] " + JSONUtil.parseObj(msg.getContent()).getStr("fileName");
                 break;
             case VOICE:
-                lastMsg = BaseContextHandler.getName() + ":语音";
+                summary = "[语音] " + JSONUtil.parseObj(msg.getContent()).getInt("duration") + "秒";
                 break;
             default:
                 break;
+        }
+        String lastMsg = (BaseContextHandler.getName() + ":" + summary).replaceAll("\\s+", " ");
+        if (lastMsg.length() > 250) {
+            lastMsg = lastMsg.substring(0, 250);
         }
         this.lambdaUpdate()
             .eq(ImConversation::getId, reqVo.getConversationId())
